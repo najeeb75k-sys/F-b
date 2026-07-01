@@ -1429,10 +1429,14 @@ function saveEntry(){
   if(!date){toast('Date zaroor darain!','error');return;}
   if(!name){toast('Account name darain!','error');return;}
   if(!amount||amount<=0){toast('Sahi amount darain!','error');return;}
+  // Account must already exist (created via Accounts List) — no more silently auto-creating a
+  // new account just because someone typed a new name into Cashbook.
+  const accExists=accounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
+  if(!accExists){toast(`"${name}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');return;}
   const id=document.getElementById('editEntryId').value;
   if(id){const idx=entries.findIndex(e=>e.id===id);entries[idx]={id,date,name,type,amount,ref,desc};toast('Entry update ho gayi! ✅','success');}
   else{entries.push({id:uid(),date,name,type,amount,ref,desc});toast('Entry save ho gayi! ✅','success');}
-  autoAddAcc(name);save();if(document.getElementById('page-accounts').classList.contains('active'))renderAccounts();refreshDash();closeModal('entryModal');
+  save();if(document.getElementById('page-accounts').classList.contains('active'))renderAccounts();refreshDash();closeModal('entryModal');
   if(currentAccDetailId===name)renderAccDetail(name);
 }
 function deleteEntry(id){
@@ -1867,6 +1871,21 @@ function cbFieldChange(el){
   const row=el.closest('tr');
   const wasBlank=row && !row.querySelector('.btn-danger'); // no delete button yet = this row had no saved entry
 
+  // Account must already exist (created via Accounts List) — block the entry with an error instead
+  // of silently creating a brand-new account just because someone typed a new name here.
+  if(field==='name'){
+    const val=value.trim();
+    if(val){
+      const exists=accounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
+      if(!exists){
+        toast(`"${val}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');
+        el.value='';
+        el.focus();
+        return;
+      }
+    }
+  }
+
   if(field==='paidNo'){
     const paidVal = value.trim();
     // Find matching paid account by paidNo
@@ -2192,19 +2211,16 @@ function buildSummaryModel(data){
     const g=classifyAccountPrefix(name);
     if(g)groups[g].push(name);
   });
-  const sumCR=names=>names.reduce((s,n)=>s+(am[n]?.cr||0),0);
-  const sumDR=names=>names.reduce((s,n)=>s+(am[n]?.dr||0),0);
 
-  const amanatCR = sumCR(groups.PA)+sumCR(groups.PARTY)+sumCR(groups.V);
-  const paidAmanatCR = sumCR(groups.P);
-  const personalDR = sumDR(groups.PA);
-  const partyDR = sumDR(groups.PARTY);
-  const vehicleDR = sumDR(groups.V);
-  const paidDR = sumDR(groups.P);
+  // Every account gets exactly ONE figure: its net balance (CR total minus DR total).
+  // No more splitting the same account's CR side into one group and DR side into another —
+  // just its plain, single balance, everywhere.
+  const net=name=>(am[name]?.cr||0)-(am[name]?.dr||0);
+  const groupNet=names=>names.reduce((s,n)=>s+net(n),0);
 
   const top=summaryTopAccounts.filter(Boolean).map(n=>({name:n,cr:am[n]?.cr||0,dr:am[n]?.dr||0}));
 
-  return {am,groups,top,amanatCR,paidAmanatCR,personalDR,partyDR,vehicleDR,paidDR};
+  return {am,groups,top,net,groupNet};
 }
 
 function summaryFilteredEntries(){
@@ -2239,10 +2255,8 @@ function renderSummary(){
   const m=buildSummaryModel(data);
   const tbody=document.getElementById('summaryBody');
 
-  // Top-level row: either a fixed top account, or a group total (Amanat / Paid Amanat / Personal / Party / Vehicle / Paid).
+  // Top-level row: either a fixed top account, or a group total (Personal / Party / Vehicle / Paid).
   const GROUP_STYLES={
-    'Amanat':        {bg:'#1a3a6b',color:'#fff',icon:'🏦'},
-    'Paid Amanat':   {bg:'#1e6b3a',color:'#fff',icon:'💳'},
     'Personal Account':{bg:'#7c3aed',color:'#fff',icon:'👤'},
     'Party Account': {bg:'#b45309',color:'#fff',icon:'🤝'},
     'Vehicle Account':{bg:'#0e7490',color:'#fff',icon:'🚛'},
@@ -2272,46 +2286,36 @@ function renderSummary(){
       <td class="no-print" style="text-align:center;">${detailBtn}</td>
     </tr>`;
   };
-  // Sub-account row: shown indented under its group, always visible. Shows ONLY this group's side
-  // (e.g. under "Amanat" only the CR amount, under "Personal Account" only the DR amount) — a PA-
-  // account's debit must never appear under Amanat (a CR-only group) and vice versa.
-  const subRowHtml=(name,side)=>{
-    const v=m.am[name]||{cr:0,dr:0};
-    const amt=side==='CR'?v.cr:v.dr;
+  // Sub-account row: shown indented under its group, always visible. Shows ONLY this account's single
+  // net balance — never split into a CR-side row in one group and a DR-side row in another.
+  const subRowHtml=(name)=>{
+    const b=m.net(name);
     return `<tr class="summary-sub-row">
       <td style="padding-left:32px;color:var(--text-light);font-size:13px;">↳ ${name}</td>
-      <td style="font-size:13px;text-align:center;color:${side==='CR'?'#15803d':'#dc2626'}">${fmt(amt)} ${side}</td>
+      <td style="font-size:13px;text-align:center;color:${b>=0?'#15803d':'#dc2626'}">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td>
       <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="openAccDetail(${JSON.stringify(name)})">📄</button></td>
     </tr>`;
   };
-  // A full group block: total row up top, then every member account beneath it, restricted to this
-  // group's side only (side: 'CR' or 'DR'). Members with a zero amount on that side are skipped.
-  const groupBlock=(label,cr,dr,names,side)=>{
-    let h=topRowHtml(label,cr,dr,names);
+  // A full group block: total row up top (sum of members' net balances), then every member account
+  // beneath it, each shown exactly once with its own net balance.
+  const groupBlock=(label,names)=>{
+    const netVal=m.groupNet(names);
+    let h=topRowHtml(label,netVal,0,names);
     names.forEach(n=>{
-      const v=m.am[n]||{cr:0,dr:0};
-      const amt=side==='CR'?v.cr:v.dr;
-      if(amt)h+=subRowHtml(n,side);
+      if(m.net(n))h+=subRowHtml(n);
     });
     return h;
   };
 
   let html='';
-  // 1 & 2 — manually fixed top accounts
+  // 1 & 2 — manually fixed top accounts (already single net balance each)
   m.top.forEach(t=>{html+=topRowHtml(t.name,t.cr,t.dr,null);});
-  // 3 — Amanat (PA-+Party-+V- CREDIT only — each member's debit, if any, belongs elsewhere, not here)
-  html+=groupBlock('Amanat',m.amanatCR,0,[...m.groups.PA,...m.groups.PARTY,...m.groups.V],'CR');
-  // 4 — Paid Amanat (P- CREDIT only)
-  html+=groupBlock('Paid Amanat',m.paidAmanatCR,0,m.groups.P,'CR');
-  // 5 — Personal Account (PA- DEBIT only)
-  html+=groupBlock('Personal Account',0,m.personalDR,m.groups.PA,'DR');
-  // 6 — Party Account (Party- DEBIT only)
-  html+=groupBlock('Party Account',0,m.partyDR,m.groups.PARTY,'DR');
-  // 7 — Vehicle Account (V- DEBIT only)
-  html+=groupBlock('Vehicle Account',0,m.vehicleDR,m.groups.V,'DR');
-  // 8 — Paid Account (P- DEBIT only)
-  html+=groupBlock('Paid Account',0,m.paidDR,m.groups.P,'DR');
-  // 9 — totals
+  // 3-6 — one group per account type, each account appearing once with its net balance
+  html+=groupBlock('Personal Account',m.groups.PA);
+  html+=groupBlock('Party Account',m.groups.PARTY);
+  html+=groupBlock('Vehicle Account',m.groups.V);
+  html+=groupBlock('Paid Account',m.groups.P);
+  // 7 — totals
   html+=`<tr style="background:var(--primary);color:white;font-weight:700;">
     <td>TOTAL DEBIT: ${fmt(tdr)} | TOTAL CREDIT: ${fmt(tcr)}</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td><td class="no-print"></td>
   </tr>`;
@@ -2374,8 +2378,6 @@ function printPage(id){
     Object.values(accBal).forEach(b=>{if(b>0)tcr+=b;else tdr+=Math.abs(b);});
     const m=buildSummaryModel(data);
     const PRINT_GROUP_STYLES={
-      'Amanat':        {bg:'#1a3a6b',color:'#fff',icon:'🏦'},
-      'Paid Amanat':   {bg:'#1e6b3a',color:'#fff',icon:'💳'},
       'Personal Account':{bg:'#7c3aed',color:'#fff',icon:'👤'},
       'Party Account': {bg:'#b45309',color:'#fff',icon:'🤝'},
       'Vehicle Account':{bg:'#0e7490',color:'#fff',icon:'🚛'},
@@ -2387,28 +2389,24 @@ function printPage(id){
       if(st)return `<tr><td colspan="2" style="background:${st.bg};color:${st.color};font-family:Poppins,sans-serif;font-weight:700;font-size:13px;padding:8px 14px;">${st.icon} ${label} &nbsp;&nbsp; ${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
       return `<tr><td style="font-weight:700;">${label}</td><td style="font-weight:700;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
     };
-    const subRow=(name,side)=>{
-      const v=m.am[name]||{cr:0,dr:0};
-      const amt=side==='CR'?v.cr:v.dr;
-      return `<tr><td style="padding-left:24px;color:#64748b;font-size:12px;">↳ ${name}</td><td style="font-size:12px;text-align:center;">${fmt(amt)} ${side}</td></tr>`;
+    const subRow=(name)=>{
+      const b=m.net(name);
+      return `<tr><td style="padding-left:24px;color:#64748b;font-size:12px;">↳ ${name}</td><td style="font-size:12px;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
     };
-    const groupRows=(label,cr,dr,names,side)=>{
-      let h=row(label,cr,dr);
+    const groupRows=(label,names)=>{
+      const netVal=m.groupNet(names);
+      let h=row(label,netVal,0);
       names.forEach(n=>{
-        const v=m.am[n]||{cr:0,dr:0};
-        const amt=side==='CR'?v.cr:v.dr;
-        if(amt)h+=subRow(n,side);
+        if(m.net(n))h+=subRow(n);
       });
       return h;
     };
     let body='';
     m.top.forEach(t=>{body+=row(t.name,t.cr,t.dr);});
-    body+=groupRows('Amanat',m.amanatCR,0,[...m.groups.PA,...m.groups.PARTY,...m.groups.V],'CR');
-    body+=groupRows('Paid Amanat',m.paidAmanatCR,0,m.groups.P,'CR');
-    body+=groupRows('Personal Account',0,m.personalDR,m.groups.PA,'DR');
-    body+=groupRows('Party Account',0,m.partyDR,m.groups.PARTY,'DR');
-    body+=groupRows('Vehicle Account',0,m.vehicleDR,m.groups.V,'DR');
-    body+=groupRows('Paid Account',0,m.paidDR,m.groups.P,'DR');
+    body+=groupRows('Personal Account',m.groups.PA);
+    body+=groupRows('Party Account',m.groups.PARTY);
+    body+=groupRows('Vehicle Account',m.groups.V);
+    body+=groupRows('Paid Account',m.groups.P);
     document.getElementById('printArea').innerHTML=`
       <div class="print-hdr"><h1>${cfg.company}</h1><p>Summary Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
       <table><thead><tr><th data-i18n="account">Account</th><th style="text-align:center;">Balance</th></tr></thead>
