@@ -323,9 +323,11 @@
       <div class="page active" id="page-dashboard">
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Total Accounts</div><div class="stat-value" id="statTotal">0</div></div>
-          <div class="stat-card"><div class="stat-icon">💹</div><div class="stat-label" data-i18n="totalCredit">Total Credit</div><div class="stat-value green" id="statCredit">0</div></div>
-          <div class="stat-card"><div class="stat-icon">📉</div><div class="stat-label" data-i18n="totalDebit">Total Debit</div><div class="stat-value red" id="statDebit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">💹</div><div class="stat-label" data-i18n="entryCredit">Total Credit (Entries)</div><div class="stat-value green" id="statCredit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">📉</div><div class="stat-label" data-i18n="entryDebit">Total Debit (Entries)</div><div class="stat-value red" id="statDebit">0</div></div>
           <div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-label" data-i18n="balance">Balance</div><div class="stat-value" id="statBalance">0</div></div>
+          <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label" data-i18n="balCredit">Total Credit (Balance)</div><div class="stat-value green" id="statBalCredit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-label" data-i18n="balDebit">Total Debit (Balance)</div><div class="stat-value red" id="statBalDebit">0</div></div>
         </div>
         <div id="balanceMismatchCard" class="card" style="display:none;border:1px solid #fecaca;background:#fff5f5;">
           <div class="card-header">
@@ -573,6 +575,7 @@
             <div class="stat-card"><div class="stat-icon">📉</div><div class="stat-label" data-i18n="totalDebit">Total Debit</div><div class="stat-value red" id="sum_dr">0</div></div>
             <div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-label" data-i18n="netBalance">Net Balance</div><div class="stat-value" id="sum_bal">0</div></div>
             <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-label" data-i18n="totalEntries">Total Entries</div><div class="stat-value" id="sum_count">0</div></div>
+            <div class="stat-card"><div class="stat-icon">🏦</div><div class="stat-label" data-i18n="totalBalanceAllAcc">Total Balance (All Accounts)</div><div class="stat-value" id="sum_totalbal">0</div></div>
           </div>
           <div class="card-title" style="margin-bottom:12px;" data-i18n="accountWiseSummary">Account-wise Summary</div>
           <div class="tbl-wrap">
@@ -846,6 +849,9 @@ const I18N = {
     navAccountsList:"Accounts List", navReports:"Reports", navSummary:"Summary", navPrint:"Print",
     navSystem:"System", navBackup:"Backup", navSettings:"Settings",
     totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Balance",
+    entryCredit:"Total Credit (Entries)", entryDebit:"Total Debit (Entries)",
+    balCredit:"Total Credit (Balance)", balDebit:"Total Debit (Balance)",
+    totalBalanceAllAcc:"Total Balance (All Accounts)",
     allAccounts:"👥 All Accounts", topAccounts:"👥 Top Accounts", viewAll:"View All →", noAccountsYet:"No accounts yet",
     cashbookNewEntries:"📒 Cashbook — New Entries", cashbookAddHint:"Add as many rows as you need",
     dateForAllRows:"📅 Date (for all rows)", commonRefNo:"📌 Common Ref No (optional)",
@@ -893,6 +899,9 @@ const I18N = {
     navAccountsList:"Accounts List", navReports:"Reports", navSummary:"Summary", navPrint:"Print",
     navSystem:"System", navBackup:"Backup", navSettings:"Settings",
     totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Balance",
+    entryCredit:"Total Credit (Entries)", entryDebit:"Total Debit (Entries)",
+    balCredit:"Total Credit (Balance)", balDebit:"Total Debit (Balance)",
+    totalBalanceAllAcc:"Total Balance (Sare Accounts)",
     allAccounts:"👥 Sare Accounts", topAccounts:"👥 Top Accounts", viewAll:"Sab Dekhain →", noAccountsYet:"Abhi koi account nahi",
     cashbookNewEntries:"📒 Cashbook — Nayi Entries", cashbookAddHint:"Jitni chahein rows add karein",
     dateForAllRows:"📅 Date (sab rows ke liye)", commonRefNo:"📌 Common Ref No (optional)",
@@ -940,6 +949,9 @@ const I18N = {
     navAccountsList:"اکاؤنٹس کی فہرست", navReports:"رپورٹس", navSummary:"خلاصہ", navPrint:"پرنٹ",
     navSystem:"سسٹم", navBackup:"بیک اپ", navSettings:"سیٹنگز",
     totalEntries:"کل اندراجات", totalCredit:"کل کریڈٹ", totalDebit:"کل ڈیبٹ", balance:"بیلنس",
+    entryCredit:"کل کریڈٹ (اندراجات)", entryDebit:"کل ڈیبٹ (اندراجات)",
+    balCredit:"کل کریڈٹ (بیلنس)", balDebit:"کل ڈیبٹ (بیلنس)",
+    totalBalanceAllAcc:"کل بیلنس (تمام اکاؤنٹس)",
     allAccounts:"👥 تمام اکاؤنٹس", topAccounts:"👥 اہم اکاؤنٹس", viewAll:"سب دیکھیں →", noAccountsYet:"ابھی کوئی اکاؤنٹ نہیں",
     cashbookNewEntries:"📒 کیش بک — نئے اندراجات", cashbookAddHint:"جتنی چاہیں قطاریں شامل کریں",
     dateForAllRows:"📅 تاریخ (تمام قطاروں کے لیے)", commonRefNo:"📌 مشترکہ ریفرنس نمبر (اختیاری)",
@@ -1269,20 +1281,28 @@ function startAllAccountsScroll(){
   },80);
 }
 function refreshDash(){
-  // Per-account net balance → sum CR-positive accounts and DR-negative accounts
+  // Entry-level totals — raw sum of every CR entry and every DR entry (no netting per account).
+  let entryCR=0,entryDR=0;
+  entries.forEach(e=>{if(e.type==='CR')entryCR+=e.amount;else entryDR+=e.amount;});
+
+  // Per-account net balance → sum CR-positive accounts and DR-negative accounts.
+  // This is the "account balance" total: each account's own balance (CR or DR) added
+  // together separately — NOT the same as the raw entry totals above.
   const accBal={};
   entries.forEach(e=>{
     if(!accBal[e.name])accBal[e.name]=0;
     accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
   });
-  let cr=0,dr=0;
-  Object.values(accBal).forEach(b=>{if(b>0)cr+=b;else dr+=Math.abs(b);});
-  const bal=cr-dr;
+  let balCR=0,balDR=0;
+  Object.values(accBal).forEach(b=>{if(b>0)balCR+=b;else balDR+=Math.abs(b);});
+  const bal=balCR-balDR;
   // Total Accounts count (unique account names from accounts list + any entry-only names)
   const allAccNames=new Set([...accounts.map(a=>a.name),...entries.map(e=>e.name)]);
   document.getElementById('statTotal').textContent=allAccNames.size;
-  document.getElementById('statCredit').textContent=fmt(cr);
-  document.getElementById('statDebit').textContent=fmt(dr);
+  document.getElementById('statCredit').textContent=fmt(entryCR);
+  document.getElementById('statDebit').textContent=fmt(entryDR);
+  document.getElementById('statBalCredit').textContent=fmt(balCR);
+  document.getElementById('statBalDebit').textContent=fmt(balDR);
   const bEl=document.getElementById('statBalance');
   bEl.textContent=fmt(Math.abs(bal));
   bEl.style.color=bal>=0?'#22c55e':'#ef4444';
@@ -2210,6 +2230,9 @@ function renderSummary(){
   document.getElementById('sum_dr').textContent=fmt(tdr);
   document.getElementById('sum_bal').textContent=fmt(Math.abs(tcr-tdr));
   document.getElementById('sum_count').textContent=data.length;
+  // Total Balance (All Accounts) — every account's own balance added together as a magnitude
+  // (not netted against each other like Net Balance above), so it reflects the true combined size.
+  document.getElementById('sum_totalbal').textContent=fmt(tcr+tdr);
   document.getElementById('printCoSum').textContent=cfg.company;
   document.getElementById('printDateSum').textContent='Summary Report | '+new Date().toLocaleDateString('en-PK');
 
