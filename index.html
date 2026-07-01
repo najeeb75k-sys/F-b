@@ -387,12 +387,12 @@
                 <th data-i18n="date">Date</th>
                 <th style="color:#fca5a5;">Debit Account</th>
                 <th style="color:#fca5a5;">Debit Amt</th>
-                <th>Description</th>
+                <th data-i18n="description">Description</th>
                 <th data-i18n="refNo">Ref No</th>
                 <th style="color:#e8a020;">Paid No</th>
                 <th style="color:#86efac;">Credit Account</th>
                 <th style="color:#86efac;">Credit Amt</th>
-                <th>Description</th>
+                <th data-i18n="description">Description</th>
                 <th data-i18n="refNo">Ref No</th>
                 <th class="no-print"></th>
               </tr></thead>
@@ -538,11 +538,11 @@
               </colgroup>
               <thead><tr>
                 <th style="text-align:center;">#</th>
-                <th>Date</th>
+                <th data-i18n="date">Date</th>
                 <th style="color:#fca5a5;text-align:right;">Debit</th>
                 <th style="color:#86efac;text-align:right;">Credit</th>
-                <th>Description</th>
-                <th>Ref No</th>
+                <th data-i18n="description">Description</th>
+                <th data-i18n="refNo">Ref No</th>
                 <th style="text-align:right;">Running Balance</th>
                 <th class="no-print" style="text-align:center;">Del</th>
               </tr></thead>
@@ -754,7 +754,7 @@
     </div>
     <div class="form-row">
       <div class="fg"><label>💰 Amount (Rs.) *</label><input type="number" class="input" id="entry_amount" placeholder="0.00"></div>
-      <div class="fg"><label>📝 Description</label><input type="text" class="input" id="entry_desc" placeholder="Description..."></div>
+      <div class="fg"><label>📝 Description</label><input type="text" class="input" id="entry_desc" placeholder="Description..." spellcheck="true" lang="ur"></div>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
       <button class="btn btn-outline" onclick="closeModal('entryModal')">Cancel</button>
@@ -785,9 +785,10 @@
 <div class="modal-overlay" id="summaryTopAccModal">
   <div class="modal" style="max-width:480px;">
     <div class="modal-hdr"><span class="modal-title">⭐ Summary Top Accounts</span><button class="modal-close" onclick="closeModal('summaryTopAccModal')">✕</button></div>
-    <div style="font-size:12px;color:var(--text-light);margin-bottom:14px;">Yeh 2 account hamesha Summary ki sabse upar dikhenge. Ek baar select karne ke baad fixed rahenge.</div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:14px;">Yeh 3 account hamesha Summary ki sabse upar dikhenge. Ek baar select karne ke baad fixed rahenge.</div>
     <div class="fg" style="margin-bottom:14px;"><label>Account #1</label><select class="sel" id="summaryTopAcc1" style="width:100%;"><option value="">— Select —</option></select></div>
-    <div class="fg" style="margin-bottom:16px;"><label>Account #2</label><select class="sel" id="summaryTopAcc2" style="width:100%;"><option value="">— Select —</option></select></div>
+    <div class="fg" style="margin-bottom:14px;"><label>Account #2</label><select class="sel" id="summaryTopAcc2" style="width:100%;"><option value="">— Select —</option></select></div>
+    <div class="fg" style="margin-bottom:16px;"><label>Account #3</label><select class="sel" id="summaryTopAcc3" style="width:100%;"><option value="">— Select —</option></select></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-outline" onclick="closeModal('summaryTopAccModal')">Cancel</button>
       <button class="btn btn-gold" onclick="saveSummaryTopAccounts()">💾 Save</button>
@@ -849,7 +850,7 @@ const I18N = {
     cashbookNewEntries:"📒 Cashbook — New Entries", cashbookAddHint:"Add as many rows as you need",
     dateForAllRows:"📅 Date (for all rows)", commonRefNo:"📌 Common Ref No (optional)",
     debitAccount:"Debit Account", creditAccount:"Credit Account", amountRs:"Amount (Rs.)", refNo:"Ref No",
-    description:"Description", addRow:"➕ Add Row", saveAllEntries:"💾 Save All Entries", clearAll:"🗑️ Clear All",
+    description:"Description", refNo:"Ref No", runningBalance:"Running Balance", addRow:"➕ Add Row", saveAllEntries:"💾 Save All Entries", clearAll:"🗑️ Clear All",
     cashbookAllEntries:"📚 Cashbook — All Entries (by date)", print:"🖨️ Print", clear:"Clear",
     editCellHint:"✏️ Tap any cell to edit it directly.", date:"Date", account:"Account", debit:"Debit",
     credit:"Credit", action:"Action",
@@ -943,7 +944,7 @@ const I18N = {
     cashbookNewEntries:"📒 کیش بک — نئے اندراجات", cashbookAddHint:"جتنی چاہیں قطاریں شامل کریں",
     dateForAllRows:"📅 تاریخ (تمام قطاروں کے لیے)", commonRefNo:"📌 مشترکہ ریفرنس نمبر (اختیاری)",
     debitAccount:"ڈیبٹ اکاؤنٹ", creditAccount:"کریڈٹ اکاؤنٹ", amountRs:"رقم (روپے)", refNo:"ریفرنس نمبر",
-    description:"تفصیل", addRow:"➕ قطار شامل کریں", saveAllEntries:"💾 تمام اندراجات محفوظ کریں", clearAll:"🗑️ سب صاف کریں",
+    description:"تفصیل", refNo:"حوالہ نمبر", runningBalance:"رننگ بیلنس", addRow:"➕ قطار شامل کریں", saveAllEntries:"💾 تمام اندراجات محفوظ کریں", clearAll:"🗑️ سب صاف کریں",
     cashbookAllEntries:"📚 کیش بک — تمام اندراجات (تاریخ کے لحاظ سے)", print:"🖨️ پرنٹ", clear:"صاف کریں",
     editCellHint:"✏️ کسی بھی خانے پر ٹیپ کریں اور براہِ راست ترمیم کریں۔", date:"تاریخ", account:"اکاؤنٹ", debit:"ڈیبٹ",
     credit:"کریڈٹ", action:"عمل",
@@ -1121,7 +1122,7 @@ if(FIREBASE_ENABLED && fbAuth){
 const DB = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d;}catch(e){return d;}}, set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)) };
 let entries = DB.get('cargo_entries',[]);
 let accounts = DB.get('cargo_accounts',[]);
-let cfg = DB.get('cargo_cfg',{company:'Farman & Brothers Cargo Service',user:'admin',pass:'admin123',curr:'Rs.',lang:'roman'});
+let cfg = DB.get('cargo_cfg',{company:'Farman & Brothers Cargo Service',user:'admin',pass:'admin123',curr:'Rs.',lang:'urdu'});
 let currentAccDetailId = null;
 let paidAccounts = DB.get("cargo_paid_accounts",[]);
 let paidEntries = DB.get("cargo_paid_entries",[]);
@@ -1135,9 +1136,14 @@ function receivedFromText(){
   if(lang==='urdu')return 'موصول از ';
   return 'Received from ';
 }
+function T(key){
+  const lang=(typeof cfg!=='undefined'&&cfg.lang)||'urdu';
+  const t=I18N[lang]||I18N['urdu'];
+  return t[key]||I18N['en'][key]||key;
+}
 function applyLanguage(){
-  const lang=cfg.lang||'roman';
-  const dict=I18N[lang]||I18N.roman;
+  const lang=cfg.lang||'urdu';
+  const dict=I18N[lang]||I18N.urdu;
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const key=el.getAttribute('data-i18n');
     if(dict[key]!==undefined){
@@ -1488,8 +1494,8 @@ function printAccountsList(){
       <td style="font-weight:700;">${fmt(Math.abs(bal))} ${bal>=0?'CR':'DR'}</td></tr>`;
   }).join('');
   document.getElementById('printArea').innerHTML=`
-    <div class="print-hdr"><h1>${cfg.company}</h1><p>Accounts List | ${new Date().toLocaleDateString('en-PK')}</p></div>
-    <table><thead><tr><th>#</th><th>Account Name</th><th>Phone</th><th>CR Total</th><th>DR Total</th><th>Balance</th></tr></thead>
+    <div class="print-hdr"><h1>${cfg.company}</h1><p>${T("accountsList")} | ${new Date().toLocaleDateString("en-PK")}</p></div>
+    <table><thead><tr><th>#</th><th>${T("accountName")}</th><th>${T("phone")}</th><th>${T("crTotal")}</th><th>${T("drTotal")}</th><th>${T("balance")}</th></tr></thead>
     <tbody>${body||'<tr><td colspan="6" style="text-align:center;">No accounts</td></tr>'}</tbody>
     <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#15803d;">${fmt(tcr)}</td><td style="color:#dc2626;">${fmt(tdr)}</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td></tr></tfoot>
     </table>`;
@@ -1598,7 +1604,7 @@ function printAccDetail(){
   </tr>`;}).join('');
   document.getElementById('printArea').innerHTML=`
     <div class="print-hdr"><h1>${cfg.company}</h1><p>${name} — Account Statement | ${new Date().toLocaleDateString('en-PK')}</p></div>
-    <table><thead><tr><th>#</th><th>Date</th><th>Debit</th><th>Credit</th><th>Description</th><th>Ref No</th><th>Running Balance</th></tr></thead>
+    <table><thead><tr><th>#</th><th>${T("date")}</th><th>${T("debit")}</th><th>${T("credit")}</th><th>${T("description")}</th><th>${T("refNo")}</th><th>${T("runningBalance")}</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;">No entries</td></tr>'}</tbody>
     <tfoot><tr style="font-weight:700;"><td colspan="2">TOTAL</td><td style="color:#dc2626;">${fmt(tdr)}</td><td style="color:#15803d;">${fmt(tcr)}</td><td colspan="2">Balance:</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td></tr></tfoot>
     </table>`;
@@ -1814,12 +1820,12 @@ function renderCashbook(){
       </td>
       <td class="cbcell cb-debit"><input type="text" placeholder="Account" value="${drName}" data-field="name" data-side="dr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
       <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${drDesc}" data-field="desc" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell"><input type="text" placeholder="Description" value="${drDesc}" data-field="desc" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
       <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" style="color:#e8a020;font-weight:600;"></td>
       <td class="cbcell cb-credit"><input type="text" placeholder="Account" value="${crName}" data-field="name" data-side="cr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
       <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${crAmt||''}" data-field="amount" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${crDesc}" data-field="desc" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell"><input type="text" placeholder="Description" value="${crDesc}" data-field="desc" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
       <td class="no-print" style="text-align:center;">${r.pairId?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="cbDeleteRow('${pid}')">🗑️</button>`:''}</td>
     </tr>`;
@@ -2128,8 +2134,8 @@ function printCashbook(){
   const tdr=sorted.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   const rows=sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td><td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td><td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td><td>${e.desc||''}</td><td>${e.ref||''}</td></tr>`).join('');
   document.getElementById('printArea').innerHTML=`
-    <div class="print-hdr"><h1>${cfg.company}</h1><p>Cashbook | ${new Date().toLocaleDateString('en-PK')}</p></div>
-    <table><thead><tr><th>#</th><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th><th>Ref No</th></tr></thead>
+    <div class="print-hdr"><h1>${cfg.company}</h1><p>${T("navCashbook")} | ${new Date().toLocaleDateString("en-PK")}</p></div>
+    <table><thead><tr><th>#</th><th>${T("date")}</th><th>${T("account")}</th><th>${T("debit")}</th><th>${T("credit")}</th><th>${T("description")}</th><th>${T("refNo")}</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;">No entries</td></tr>'}</tbody>
     <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tdr)}</td><td style="color:#15803d;">${fmt(tcr)}</td><td colspan="2">Balance: ${fmt(Math.abs(tcr-tdr))}</td></tr></tfoot>
     </table>`;
@@ -2137,7 +2143,7 @@ function printCashbook(){
 }
 
 // SUMMARY — fixed top accounts (set once via the Top Accounts picker, persisted like a setting)
-let summaryTopAccounts = DB.get('summary_top_accounts', ['','']);
+let summaryTopAccounts = DB.get('summary_top_accounts', ['','','']);
 
 // Classifies an account name by its prefix. Checks "PA-" before "P-" (and "Party-" before "P-")
 // since they share a leading letter — longer/more-specific prefixes must be tested first.
@@ -2310,17 +2316,20 @@ function openSummaryGroupDetail(names,label){
 // ── Summary Top-Accounts Picker ────────────────────────────────
 function openSummaryTopAccPicker(){
   const opts='<option value="">— Select —</option>'+accounts.map(a=>`<option value="${a.name}">${a.name}</option>`).join('');
-  const s1=document.getElementById('summaryTopAcc1'), s2=document.getElementById('summaryTopAcc2');
-  s1.innerHTML=opts;s2.innerHTML=opts;
+  const s1=document.getElementById('summaryTopAcc1'), s2=document.getElementById('summaryTopAcc2'), s3=document.getElementById('summaryTopAcc3');
+  s1.innerHTML=opts;s2.innerHTML=opts;s3.innerHTML=opts;
   s1.value=summaryTopAccounts[0]||'';
   s2.value=summaryTopAccounts[1]||'';
+  s3.value=summaryTopAccounts[2]||'';
   openModal('summaryTopAccModal');
 }
 function saveSummaryTopAccounts(){
   const a1=document.getElementById('summaryTopAcc1').value;
   const a2=document.getElementById('summaryTopAcc2').value;
-  if(a1&&a2&&a1===a2){toast('Dono account alag hone chahiye!','error');return;}
-  summaryTopAccounts=[a1,a2];
+  const a3=document.getElementById('summaryTopAcc3').value;
+  const sel=[a1,a2,a3].filter(Boolean);
+  if(new Set(sel).size!==sel.length){toast('Sab account alag hone chahiye!','error');return;}
+  summaryTopAccounts=[a1,a2,a3];
   DB.set('summary_top_accounts',summaryTopAccounts);
   closeModal('summaryTopAccModal');
   renderSummary();
@@ -2372,7 +2381,7 @@ function printPage(id){
     body+=groupRows('Paid Account',0,m.paidDR,m.groups.P,'DR');
     document.getElementById('printArea').innerHTML=`
       <div class="print-hdr"><h1>${cfg.company}</h1><p>Summary Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
-      <table><thead><tr><th>Account</th><th style="text-align:center;">Balance</th></tr></thead>
+      <table><thead><tr><th data-i18n="account">Account</th><th style="text-align:center;">Balance</th></tr></thead>
       <tbody>${body||'<tr><td colspan="2" style="text-align:center;">No data</td></tr>'}</tbody>
       <tfoot><tr style="font-weight:700;"><td>TOTAL DEBIT: ${fmt(tdr)} | TOTAL CREDIT: ${fmt(tcr)}</td><td style="text-align:center;">${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td></tr></tfoot>
       </table>`;
@@ -2398,7 +2407,7 @@ function previewPrint(){
       <p style="color:var(--text-light);font-size:12px;">Printed: ${new Date().toLocaleDateString('en-PK')} | Entries: ${sorted.length}</p>
     </div>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>#</th><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th><th>Ref</th></tr></thead>
+      <thead><tr><th>#</th><th data-i18n="date">Date</th><th data-i18n="account">Account</th><th data-i18n="debit">Debit</th><th data-i18n="credit">Credit</th><th data-i18n="description">Description</th><th>Ref</th></tr></thead>
       <tbody>${sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td>
         <td style="color:#dc2626;">${e.type==='DR'?fmt(e.amount):''}</td>
         <td style="color:#15803d;">${e.type==='CR'?fmt(e.amount):''}</td>
@@ -2431,7 +2440,7 @@ function doPrint(){
   previewPrint();
   document.getElementById('printArea').innerHTML=`
     <div class="print-hdr"><h1>${cfg.company}</h1><p>Printed: ${new Date().toLocaleDateString('en-PK')} | Entries: ${sorted.length}</p></div>
-    <table><thead><tr><th>#</th><th>Date</th><th>Account</th><th>Debit</th><th>Credit</th><th>Description</th><th>Ref</th><th>Running Balance</th></tr></thead>
+    <table><thead><tr><th>#</th><th data-i18n="date">Date</th><th data-i18n="account">Account</th><th data-i18n="debit">Debit</th><th data-i18n="credit">Credit</th><th data-i18n="description">Description</th><th>Ref</th><th data-i18n="runningBalance">Running Balance</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
     <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tdr)}</td><td style="color:#15803d;">${fmt(tcr)}</td><td colspan="2">Balance:</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td></tr></tfoot>
     </table>`;
@@ -2692,7 +2701,7 @@ function printPaidDetail(){
   </tr>`;}).join('');
   document.getElementById('printArea').innerHTML=`
     <div class="print-hdr"><h1>${cfg.company}</h1><p>${a.name} (Paid No: ${a.paidNo||'-'}) — Paid Ledger | ${new Date().toLocaleDateString('en-PK')}</p></div>
-    <table><thead><tr><th>#</th><th>Date</th><th>Debit</th><th>Credit</th><th>Description</th><th>Ref No</th><th>Running Balance</th></tr></thead>
+    <table><thead><tr><th>#</th><th data-i18n="date">Date</th><th data-i18n="debit">Debit</th><th data-i18n="credit">Credit</th><th data-i18n="description">Description</th><th data-i18n="refNo">Ref No</th><th data-i18n="runningBalance">Running Balance</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;">No entries</td></tr>'}</tbody>
     <tfoot><tr style="font-weight:700;"><td colspan="2">TOTAL</td><td style="color:#dc2626;">${fmt(tdr)}</td><td style="color:#15803d;">${fmt(tcr)}</td><td colspan="2">Balance:</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td></tr></tfoot>
     </table>`;
@@ -2769,5 +2778,85 @@ window.addEventListener('appinstalled', ()=>{
   banner.style.display = 'none';
 });
 </script>
+
+<script>
+// ── Roman Urdu Spell Check ────────────────────────────────────
+// Common Roman Urdu words — description fields mein type karne par check hoga
+const ROMAN_URDU_DICT = new Set([
+  // Numbers / amounts
+  'ek','do','teen','char','paanch','chhe','saat','aath','nau','das',
+  'bees','tees','chalis','pachaas','saath','assi','nabbe','sau','hazar','lakh','crore',
+  // Common cargo/business words
+  'maal','saman','raseed','hisab','udhaar','nakad','ادائیگی','payment','advance','baqi',
+  'total','kul','jama','kharch','amdani','munafa','nuqsan','kharcha',
+  'truck','gaari','vehicle','driver','savari','kiraya','bhara','freight',
+  'aaj','kal','parson','tarikh','mahina','hafta','saal',
+  'January','February','March','April','May','June','July','August','September','October','November','December',
+  'jan','feb','mar','apr','jun','jul','aug','sep','oct','nov','dec',
+  // Pronouns/common words
+  'ka','ki','ke','se','ko','ne','par','mein','hai','hain','tha','thi','the',
+  'yeh','woh','aur','ya','nahi','haan','theek','sahi','ghalat',
+  'liya','diya','mila','gaya','aya','gaya','kiya','karna','karo',
+  'pehle','baad','abhi','phir','dobara','baar',
+  'apna','apni','apne','mera','meri','mere','tera','teri','tere','hamara','hamari',
+  'sahib','bhai','jee','sb','sr','mr','mrs','m','s',
+  // Cargo specific
+  'load','unload','loading','unloading','delivery','pickup','party','agent',
+  'bill','receipt','challan','invoice','voucher','slip','form',
+  'received','paid','pending','complete','partial','full','half',
+  'rawalpindi','lahore','karachi','islamabad','peshawar','multan','faisalabad','quetta',
+  'pindi','isb','lhr','khi',
+  // Short forms
+  'rs','pk','no','ref','acc','dr','cr','bal','amt',
+  // English common words (allowed)
+  'from','to','for','by','with','in','at','on','of','the','and','or','not',
+  'cash','bank','cheque','online','transfer','deposit','withdrawal',
+  'account','accounts','balance','debit','credit','amount','date','description',
+  'January','February','March','April','May','June','July','August','September','October','November','December',
+]);
+
+function romanUrduSpellCheck(input) {
+  const val = input.value.trim();
+  if (!val) { input.style.borderBottom = ''; input.title = ''; return; }
+  const words = val.split(/\s+/);
+  const wrongWords = words.filter(w => {
+    const clean = w.replace(/[0-9०-९,.\-\/\()\[\]{}!@#$%^&*+=<>?:;"']/g, '').toLowerCase();
+    if (!clean || clean.length <= 1) return false;
+    // If it starts with Urdu/Arabic chars, it's fine
+    if (/[؀-ۿ]/.test(clean)) return false;
+    // If it's a number, fine
+    if (/^\d+$/.test(clean)) return false;
+    // Check against dict
+    return !ROMAN_URDU_DICT.has(clean) && !ROMAN_URDU_DICT.has(w.toLowerCase());
+  });
+  if (wrongWords.length > 0) {
+    input.style.borderBottom = '2px solid #ef4444';
+    input.style.textDecoration = 'underline wavy red';
+    input.title = 'Ghalat lafz: ' + wrongWords.join(', ');
+  } else {
+    input.style.borderBottom = '';
+    input.style.textDecoration = '';
+    input.title = '';
+  }
+}
+
+// Attach spell check to all desc inputs dynamically
+function attachSpellCheck() {
+  document.querySelectorAll('input[data-field="desc"], #entry_desc').forEach(inp => {
+    if (inp.dataset.spellAttached) return;
+    inp.dataset.spellAttached = '1';
+    inp.addEventListener('input', () => romanUrduSpellCheck(inp));
+    inp.addEventListener('blur', () => romanUrduSpellCheck(inp));
+  });
+}
+
+// Observe DOM changes to attach to dynamically added rows
+const spellObserver = new MutationObserver(() => attachSpellCheck());
+document.addEventListener('DOMContentLoaded', () => {
+  spellObserver.observe(document.body, { childList: true, subtree: true });
+  attachSpellCheck();
+});
+</script>
+
 </body>
 </html>
