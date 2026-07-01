@@ -1263,8 +1263,14 @@ function startAllAccountsScroll(){
   },80);
 }
 function refreshDash(){
-  const cr=entries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-  const dr=entries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+  // Per-account net balance → sum CR-positive accounts and DR-negative accounts
+  const accBal={};
+  entries.forEach(e=>{
+    if(!accBal[e.name])accBal[e.name]=0;
+    accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
+  });
+  let cr=0,dr=0;
+  Object.values(accBal).forEach(b=>{if(b>0)cr+=b;else dr+=Math.abs(b);});
   const bal=cr-dr;
   // Total Accounts count (unique account names from accounts list + any entry-only names)
   const allAccNames=new Set([...accounts.map(a=>a.name),...entries.map(e=>e.name)]);
@@ -2186,8 +2192,14 @@ function summaryFilteredEntries(){
 
 function renderSummary(){
   const data=summaryFilteredEntries();
-  const tcr=data.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-  const tdr=data.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+  // Per-account net balance — sum CR-positive and DR-negative accounts (not raw entry totals)
+  const accBal={};
+  data.forEach(e=>{
+    if(!accBal[e.name])accBal[e.name]=0;
+    accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
+  });
+  let tcr=0,tdr=0;
+  Object.values(accBal).forEach(b=>{if(b>0)tcr+=b;else tdr+=Math.abs(b);});
   document.getElementById('sum_cr').textContent=fmt(tcr);
   document.getElementById('sum_dr').textContent=fmt(tdr);
   document.getElementById('sum_bal').textContent=fmt(Math.abs(tcr-tdr));
