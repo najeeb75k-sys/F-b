@@ -1115,11 +1115,12 @@ function attachCloudSync(){
       if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
       if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
       if(document.getElementById('page-paidAccounts')?.classList.contains('active'))renderPaidAccounts();
+      if(document.getElementById('page-paidAccDetail')?.classList.contains('active')&&currentPaidAccId)renderPaidAccDetail(currentPaidAccId);
       fbApplyingRemote=false;
       setSyncBadge('connected');
     }else{
-      // first time this Google account signs in — push current local data up as the seed
-      pushToCloud();
+      // first time this Google account signs in — push ALL current local data up as the seed
+      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts});
     }
   }, err=>{
     console.error('Firestore listen error',err);
@@ -1127,16 +1128,23 @@ function attachCloudSync(){
   });
 }
 
-let fbPushTimer=null;
-function pushToCloud(){
+// pushToCloud now only sends the specific field(s) that were actually changed, not the whole
+// data bundle every time. Previously EVERY save (even a single cashbook entry) re-sent the
+// device's in-memory copy of paidAccounts/paidEntries/summaryTopAccounts too — and since those
+// change less often, a stale local copy would silently overwrite the other device's fresher data.
+// Pending fields accumulate across the debounce window so several quick saves (e.g. save() then
+// savePaid()) still go out together in one write.
+let fbPushTimer=null, fbPendingFields=null;
+function pushToCloud(fields){
   if(!fbUser||!fbDb)return;
   if(fbApplyingRemote)return; // don't echo back data we just received
+  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts});
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
-    fbDb.collection('cargo_data').doc(fbUser.uid).set({
-      entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,updatedAt:new Date().toISOString()
-    },{merge:true}).then(()=>{
+    const payload={...fbPendingFields, updatedAt:new Date().toISOString()};
+    fbPendingFields=null;
+    fbDb.collection('cargo_data').doc(fbUser.uid).set(payload,{merge:true}).then(()=>{
       setSyncBadge('connected');
     }).catch(err=>{
       console.error('Push to cloud failed',err);
@@ -1199,8 +1207,8 @@ function saveLang(){
 }
 function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function today(){return new Date().toISOString().split('T')[0];}
-function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud();}
-function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud();}
+function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
+function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3000);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -2150,7 +2158,7 @@ function renderRecycleBin(){
   // Remove entries older than 30 days
   const cutoff=Date.now()-(30*24*60*60*1000);
   recycleBin=recycleBin.filter(e=>new Date(e.deletedAt).getTime()>cutoff);
-  DB.set('cargo_recycle',recycleBin);pushToCloud();
+  DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
   count.textContent=recycleBin.length+' deleted entries (30 din tak recover kar sakte hain)';
   if(!recycleBin.length){
     list.innerHTML='<div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px;">♻️ Recycle bin khali hai</div>';
@@ -2182,14 +2190,14 @@ function restoreEntry(id){
       savePaid();
     }
   }
-  save();DB.set('cargo_recycle',recycleBin);pushToCloud();
+  save();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
   refreshDash();renderRecycleBin();
   toast('Entry restore ho gayi! ✅','success');
 }
 function emptyRecycleBin(){
   if(!recycleBin.length){toast('Bin pehle se khali hai!','');return;}
   if(!confirm('Recycle bin ki sab entries permanently delete ho jayengi. Sure hain?'))return;
-  recycleBin=[];DB.set('cargo_recycle',recycleBin);pushToCloud();renderRecycleBin();toast('Recycle Bin khali ho gayi!','');
+  recycleBin=[];DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});renderRecycleBin();toast('Recycle Bin khali ho gayi!','');
 }
 function printCashbook(){
   const sorted=[...entries].sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -2382,7 +2390,7 @@ function saveSummaryTopAccounts(){
   if(new Set(sel).size!==sel.length){toast('Sab account alag hone chahiye!','error');return;}
   summaryTopAccounts=[a1,a2,a3];
   DB.set('summary_top_accounts',summaryTopAccounts);
-  pushToCloud();
+  pushToCloud({summaryTopAccounts});
   closeModal('summaryTopAccModal');
   renderSummary();
   toast('Top Accounts save ho gaye! ✅','success');
