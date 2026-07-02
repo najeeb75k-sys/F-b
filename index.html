@@ -1699,12 +1699,31 @@ function renderAccounts(data){
   const list=data||accounts;
   const tbody=document.getElementById('accountsBody');
   if(!list.length){tbody.innerHTML='<tr><td colspan="8" style="padding:30px;text-align:center;color:#94a3b8;">No accounts added</td></tr>';return;}
-  tbody.innerHTML=list.map((a,i)=>{
+  // Group into PA- / Party- / V- sections (in that order). Within each section accounts stay in
+  // their existing (insertion) order, so a newly-added account naturally lands as that section's
+  // last row — right before its section's total row. Anything not matching a known prefix falls
+  // into a trailing "Other" section so nothing ever silently disappears.
+  const SECTIONS=[
+    {key:'PA',label:'Personal Accounts (PA-)'},
+    {key:'PARTY',label:'Party Accounts (PARTY-)'},
+    {key:'V',label:'Vehicle Accounts (V-)'},
+  ];
+  const buckets={PA:[],PARTY:[],V:[],OTHER:[]};
+  list.forEach(a=>{
+    const n=(a.name||'').trim().toLowerCase();
+    if(n.startsWith('pa-'))buckets.PA.push(a);
+    else if(n.startsWith('party-'))buckets.PARTY.push(a);
+    else if(n.startsWith('v-'))buckets.V.push(a);
+    else buckets.OTHER.push(a);
+  });
+  let rowNum=0;
+  const acctRow=(a)=>{
+    rowNum++;
     const cr=entries.filter(e=>e.name===a.name&&e.type==='CR').reduce((s,e)=>s+e.amount,0);
     const dr=entries.filter(e=>e.name===a.name&&e.type==='DR').reduce((s,e)=>s+e.amount,0);
     const bal=cr-dr;
-    return `<tr>
-      <td style="color:var(--text-light);">${i+1}</td>
+    return {cr,dr,html:`<tr>
+      <td style="color:var(--text-light);">${rowNum}</td>
       <td style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="openAccDetail('${a.name}')">${a.name} <span style="font-size:11px;opacity:.6;">→</span></td>
       <td>${a.phone||'-'}</td><td class="hide-mobile">${a.address||'-'}</td>
       <td style="color:#15803d;font-weight:600;">${fmt(cr)}</td>
@@ -1714,8 +1733,32 @@ function renderAccounts(data){
         <button class="btn btn-sm btn-outline" onclick="openAddAcc('${a.id}')" style="margin-right:4px;">✏️</button>
         <button class="btn btn-sm btn-danger" onclick="deleteAcc('${a.id}')">🗑️</button>
       </td>
+    </tr>`};
+  };
+  const totalRow=(label,tcr,tdr)=>{
+    const tbal=tcr-tdr;
+    return `<tr style="background:#eef2f8;">
+      <td colspan="4" style="font-weight:700;text-align:right;padding-right:14px;">${label} — Total</td>
+      <td style="font-weight:700;color:#15803d;">${fmt(tcr)}</td>
+      <td style="font-weight:700;color:#dc2626;">${fmt(tdr)}</td>
+      <td style="font-weight:700;color:${tbal>=0?'#15803d':'#dc2626'}">${fmt(Math.abs(tbal))} ${tbal>=0?'CR':'DR'}</td>
+      <td class="no-print"></td>
     </tr>`;
-  }).join('');
+  };
+  let html='';
+  SECTIONS.forEach(sec=>{
+    const items=buckets[sec.key];
+    if(!items.length)return;
+    let tcr=0,tdr=0;
+    items.forEach(a=>{const r=acctRow(a);html+=r.html;tcr+=r.cr;tdr+=r.dr;});
+    html+=totalRow(sec.label,tcr,tdr);
+  });
+  if(buckets.OTHER.length){
+    let tcr=0,tdr=0;
+    buckets.OTHER.forEach(a=>{const r=acctRow(a);html+=r.html;tcr+=r.cr;tdr+=r.dr;});
+    html+=totalRow('Other Accounts',tcr,tdr);
+  }
+  tbody.innerHTML=html;
 }
 function filterAccounts(){const q=document.getElementById('accSearch').value.toLowerCase();renderAccounts(q?accounts.filter(a=>a.name.toLowerCase().includes(q)):accounts);}
 function printAccountsList(){
@@ -3115,9 +3158,20 @@ function buildSummaryModel(data){
   const net=name=>(am[name]?.cr||0)-(am[name]?.dr||0);
   const groupNet=names=>names.reduce((s,n)=>s+net(n),0);
 
+  // Split a group's accounts by which side their balance sits on:
+  // credit-balance accounts (net > 0) → sorted biggest credit first (for Amanat / Paid Amanat)
+  // debit-balance accounts (net < 0) → sorted biggest debit first (for the 4 group blocks below)
+  const creditOf=names=>names.filter(n=>net(n)>0).sort((a,b)=>net(b)-net(a));
+  const debitOf=names=>names.filter(n=>net(n)<0).sort((a,b)=>net(a)-net(b));
+
+  // Amanat — every credit-balance account across Personal/Party/Vehicle, combined and ranked.
+  const amanatNames=[...creditOf(groups.PA),...creditOf(groups.PARTY),...creditOf(groups.V)].sort((a,b)=>net(b)-net(a));
+  // Paid Amanat — every credit-balance Paid (P-) account.
+  const paidAmanatNames=creditOf(groups.P);
+
   const top=summaryTopAccounts.filter(Boolean).map(n=>({name:n,cr:am[n]?.cr||0,dr:am[n]?.dr||0}));
 
-  return {am,groups,top,net,groupNet};
+  return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames};
 }
 
 function summaryFilteredEntries(){
@@ -3154,6 +3208,8 @@ function renderSummary(){
 
   // Top-level row: either a fixed top account, or a group total (Personal / Party / Vehicle / Paid).
   const GROUP_STYLES={
+    'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
+    'Paid Amanat':   {bg:'#0e7490',color:'#fff',icon:'🔐'},
     'Personal Account':{bg:'#5b3a8c',color:'#fff',icon:'👤'},
     'Party Account': {bg:'#a3620f',color:'#fff',icon:'🤝'},
     'Vehicle Account':{bg:'#0b6478',color:'#fff',icon:'🚛'},
@@ -3193,25 +3249,35 @@ function renderSummary(){
       <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="openAccDetail(${JSON.stringify(name)})">📄</button></td>
     </tr>`;
   };
-  // A full group block: total row up top (sum of members' net balances), then every member account
-  // beneath it, each shown exactly once with its own net balance.
-  const groupBlock=(label,names)=>{
-    const netVal=m.groupNet(names);
-    let h=topRowHtml(label,netVal,0,names);
-    names.forEach(n=>{
-      if(m.net(n))h+=subRowHtml(n);
-    });
+  // Amanat block: shows only credit-balance accounts (already filtered + ranked biggest-first
+  // by buildSummaryModel), total = sum of their credit balances.
+  const amanatBlock=(label,names)=>{
+    const total=names.reduce((s,n)=>s+m.net(n),0);
+    let h=topRowHtml(label,total,0,names);
+    names.forEach(n=>{h+=subRowHtml(n);});
+    return h;
+  };
+  // Group block (Personal/Party/Vehicle/Paid): shows only THIS group's debit-balance accounts —
+  // credit-balance ones moved out to Amanat/Paid Amanat above — ranked biggest-debit-first.
+  const debitGroupBlock=(label,names)=>{
+    const debitNames=m.debitOf(names);
+    const total=debitNames.reduce((s,n)=>s-m.net(n),0);
+    let h=topRowHtml(label,0,total,debitNames);
+    debitNames.forEach(n=>{h+=subRowHtml(n);});
     return h;
   };
 
   let html='';
   // 1 & 2 — manually fixed top accounts (already single net balance each)
   m.top.forEach(t=>{html+=topRowHtml(t.name,t.cr,t.dr,null);});
-  // 3-6 — one group per account type, each account appearing once with its net balance
-  html+=groupBlock('Personal Account',m.groups.PA);
-  html+=groupBlock('Party Account',m.groups.PARTY);
-  html+=groupBlock('Vehicle Account',m.groups.V);
-  html+=groupBlock('Paid Account',m.groups.P);
+  // 3 & 4 — Amanat (PA+Party+Vehicle credit accounts combined) and Paid Amanat (Paid credit accounts)
+  html+=amanatBlock('Amanat',m.amanatNames);
+  html+=amanatBlock('Paid Amanat',m.paidAmanatNames);
+  // 5-8 — one group per account type, showing only its debit-balance accounts (biggest debit first)
+  html+=debitGroupBlock('Personal Account',m.groups.PA);
+  html+=debitGroupBlock('Party Account',m.groups.PARTY);
+  html+=debitGroupBlock('Vehicle Account',m.groups.V);
+  html+=debitGroupBlock('Paid Account',m.groups.P);
   // 7 — totals
   html+=`<tr style="background:var(--primary);color:white;font-weight:700;">
     <td>TOTAL DEBIT: ${fmt(tdr)} | TOTAL CREDIT: ${fmt(tcr)}</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td><td class="no-print"></td>
@@ -3276,6 +3342,8 @@ function printPage(id){
     Object.values(accBal).forEach(b=>{if(b>0)tcr+=b;else tdr+=Math.abs(b);});
     const m=buildSummaryModel(data);
     const PRINT_GROUP_STYLES={
+      'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
+      'Paid Amanat':   {bg:'#0e7490',color:'#fff',icon:'🔐'},
       'Personal Account':{bg:'#5b3a8c',color:'#fff',icon:'👤'},
       'Party Account': {bg:'#a3620f',color:'#fff',icon:'🤝'},
       'Vehicle Account':{bg:'#0b6478',color:'#fff',icon:'🚛'},
@@ -3291,20 +3359,27 @@ function printPage(id){
       const b=m.net(name);
       return `<tr><td style="padding-left:24px;color:#64748b;font-size:12px;">↳ ${name}</td><td style="font-size:12px;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
     };
-    const groupRows=(label,names)=>{
-      const netVal=m.groupNet(names);
-      let h=row(label,netVal,0);
-      names.forEach(n=>{
-        if(m.net(n))h+=subRow(n);
-      });
+    const amanatRows=(label,names)=>{
+      const total=names.reduce((s,n)=>s+m.net(n),0);
+      let h=row(label,total,0);
+      names.forEach(n=>{h+=subRow(n);});
+      return h;
+    };
+    const debitGroupRows=(label,names)=>{
+      const debitNames=m.debitOf(names);
+      const total=debitNames.reduce((s,n)=>s-m.net(n),0);
+      let h=row(label,0,total);
+      debitNames.forEach(n=>{h+=subRow(n);});
       return h;
     };
     let body='';
     m.top.forEach(t=>{body+=row(t.name,t.cr,t.dr);});
-    body+=groupRows('Personal Account',m.groups.PA);
-    body+=groupRows('Party Account',m.groups.PARTY);
-    body+=groupRows('Vehicle Account',m.groups.V);
-    body+=groupRows('Paid Account',m.groups.P);
+    body+=amanatRows('Amanat',m.amanatNames);
+    body+=amanatRows('Paid Amanat',m.paidAmanatNames);
+    body+=debitGroupRows('Personal Account',m.groups.PA);
+    body+=debitGroupRows('Party Account',m.groups.PARTY);
+    body+=debitGroupRows('Vehicle Account',m.groups.V);
+    body+=debitGroupRows('Paid Account',m.groups.P);
     document.getElementById('printArea').innerHTML=`
       <div class="print-hdr"><h1>${cfg.company}</h1><p>Summary Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
       <table><thead><tr><th data-i18n="account">Account</th><th style="text-align:center;">Balance</th></tr></thead>
