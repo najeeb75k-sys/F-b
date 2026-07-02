@@ -323,20 +323,20 @@
   <div class="app-layout">
     <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
-      <div class="nav-sec" data-i18n="navMain">Main</div>
-      <div class="nav-item active" onclick="showPage('dashboard',this)"><span>📊</span> <span data-i18n="navDashboard">Dashboard</span></div>
-      <div class="nav-sec" data-i18n="navAccounts">Accounts</div>
-      <div class="nav-item" onclick="showPage('autoEntry',this)"><span>📒</span> <span data-i18n="navCashbook">Cashbook</span></div>
-      <div class="nav-item" onclick="showPage('tpEntry',this)"><span>⚖️</span> <span>Party & Paid Entry</span></div>
-      <div class="nav-item" onclick="showPage('obEntry',this)"><span>🏁</span> <span>Opening Balance</span></div>
-      <div class="nav-item" onclick="showPage('accounts',this)"><span>👥</span> <span data-i18n="navAccountsList">Accounts List</span></div>
-      <div class="nav-item" onclick="showPage('paidAccounts',this)"><span>💳</span> <span>Paid Accounts</span></div>
+      <div class="nav-sec staff-hide" data-i18n="navMain">Main</div>
+      <div class="nav-item active staff-hide" data-page="dashboard" onclick="showPage('dashboard',this)"><span>📊</span> <span data-i18n="navDashboard">Dashboard</span></div>
+      <div class="nav-sec staff-hide" data-i18n="navAccounts">Accounts</div>
+      <div class="nav-item staff-hide" data-page="autoEntry" onclick="showPage('autoEntry',this)"><span>📒</span> <span data-i18n="navCashbook">Cashbook</span></div>
+      <div class="nav-item staff-hide" data-page="tpEntry" onclick="showPage('tpEntry',this)"><span>⚖️</span> <span>Party & Paid Entry</span></div>
+      <div class="nav-item staff-hide" data-page="obEntry" onclick="showPage('obEntry',this)"><span>🏁</span> <span>Opening Balance</span></div>
+      <div class="nav-item staff-hide" data-page="accounts" onclick="showPage('accounts',this)"><span>👥</span> <span data-i18n="navAccountsList">Accounts List</span></div>
+      <div class="nav-item staff-hide" data-page="paidAccounts" onclick="showPage('paidAccounts',this)"><span>💳</span> <span>Paid Accounts</span></div>
       <div class="nav-sec" data-i18n="navReports">Reports</div>
-      <div class="nav-item" onclick="showPage('summary',this)"><span>📈</span> <span data-i18n="navSummary">Summary</span></div>
-      <div class="nav-item" onclick="showPage('print',this)"><span>🖨️</span> <span data-i18n="navPrint">Print</span></div>
-      <div class="nav-sec" data-i18n="navSystem">System</div>
-      <div class="nav-item" onclick="showPage('backup',this)"><span>💾</span> <span data-i18n="navBackup">Backup</span></div>
-      <div class="nav-item" onclick="showPage('settings',this)"><span>⚙️</span> <span data-i18n="navSettings">Settings</span></div>
+      <div class="nav-item" data-page="summary" onclick="showPage('summary',this)"><span>📈</span> <span data-i18n="navSummary">Summary</span></div>
+      <div class="nav-item" data-page="print" onclick="showPage('print',this)"><span>🖨️</span> <span data-i18n="navPrint">Print</span></div>
+      <div class="nav-sec staff-hide" data-i18n="navSystem">System</div>
+      <div class="nav-item staff-hide" data-page="backup" onclick="showPage('backup',this)"><span>💾</span> <span data-i18n="navBackup">Backup</span></div>
+      <div class="nav-item staff-hide" data-page="settings" onclick="showPage('settings',this)"><span>⚙️</span> <span data-i18n="navSettings">Settings</span></div>
     </div>
 
     <!-- Content -->
@@ -848,6 +848,14 @@
             <button class="btn btn-outline btn-sm" onclick="openModal('pwdModal')" data-i18n="changePassword">Change Password</button>
           </div>
           <div class="setting-item">
+            <div><div class="setting-label">👤 Staff Login (Restricted)</div><div class="setting-desc">Yeh login sirf <b>Summary</b> aur <b>Print</b> page dekh sakta hai — baqi kuch bhi nahi.</div></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" class="input" id="settingStaffUser" style="width:120px;" placeholder="Staff username">
+              <input type="text" class="input" id="settingStaffPass" style="width:120px;" placeholder="Staff password">
+              <button class="btn btn-primary btn-sm" onclick="saveStaffLogin()" data-i18n="save">Save</button>
+            </div>
+          </div>
+          <div class="setting-item">
             <div><div class="setting-label" data-i18n="currencySymbol">💱 Currency Symbol</div><div class="setting-desc" data-i18n="currencySymbolDesc">Amount ke sath dikhne wala symbol</div></div>
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="text" class="input" id="settingCurr" style="width:80px;" placeholder="Rs.">
@@ -1186,8 +1194,10 @@ function googleSignIn(){
 }
 
 function onSignedIn(){
+  isStaffUser=false;
   document.getElementById('loginPage').style.display='none';
   document.getElementById('mainApp').style.display='block';
+  applyUserRestrictions();
   setSyncBadge('syncing');
   attachCloudSync();
   initApp();
@@ -1285,7 +1295,9 @@ if(FIREBASE_ENABLED && fbAuth){
 const DB = { get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d;}catch(e){return d;}}, set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)) };
 let entries = DB.get('cargo_entries',[]);
 let accounts = DB.get('cargo_accounts',[]);
-let cfg = DB.get('cargo_cfg',{company:'Farman & Brothers Cargo Service',user:'admin',pass:'admin123',curr:'Rs.',lang:'urdu'});
+let cfg = DB.get('cargo_cfg',{company:'Farman & Brothers Cargo Service',user:'admin',pass:'admin123',curr:'Rs.',lang:'urdu',staffUser:'staff',staffPass:'staff123'});
+let isStaffUser=false; // true = restricted login, can only see Summary + Print pages
+const STAFF_ALLOWED_PAGES=['summary','print'];
 let currentAccDetailId = null;
 let paidAccounts = DB.get("cargo_paid_accounts",[]);
 let paidEntries = DB.get("cargo_paid_entries",[]);
@@ -1341,12 +1353,28 @@ document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click
 function doLogin(){
   const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;
   if(u===cfg.user&&p===cfg.pass){
+    isStaffUser=false;
     document.getElementById('loginPage').style.display='none';
     document.getElementById('mainApp').style.display='block';
+    applyUserRestrictions();
     initApp();
+  }else if(cfg.staffUser&&u===cfg.staffUser&&p===cfg.staffPass){
+    isStaffUser=true;
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    applyUserRestrictions();
+    initApp();
+    showPage('summary',document.querySelector('.nav-item[data-page="summary"]'));
   }else{
     const el=document.getElementById('loginError');el.style.display='block';setTimeout(()=>el.style.display='none',3000);
   }
+}
+// Shows/hides sidebar sections and pages based on login type. Staff login only ever sees
+// Summary aur Print — sab kuch aur (Dashboard, Cashbook, Accounts, Backup, Settings, etc) hidden hai.
+function applyUserRestrictions(){
+  document.querySelectorAll('.staff-hide').forEach(el=>{
+    el.style.display=isStaffUser?'none':'';
+  });
 }
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('loginUser').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('loginPass').focus();});
@@ -1355,6 +1383,7 @@ function doLogout(){
     if(fbUnsub){fbUnsub();fbUnsub=null;}
     if(FIREBASE_ENABLED&&fbAuth&&fbAuth.currentUser){fbAuth.signOut().catch(()=>{});}
     fbUser=null;
+    isStaffUser=false;
     setSyncBadge('off');
     document.getElementById('mainApp').style.display='none';
     document.getElementById('loginPage').style.display='flex';
@@ -1369,6 +1398,8 @@ function initApp(){
   document.getElementById('currentDate').textContent=new Date().toLocaleDateString('en-PK',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
   document.getElementById('settingCo').value=cfg.company;
   document.getElementById('settingUser').value=cfg.user;
+  if(document.getElementById('settingStaffUser'))document.getElementById('settingStaffUser').value=cfg.staffUser||'';
+  if(document.getElementById('settingStaffPass'))document.getElementById('settingStaffPass').value=cfg.staffPass||'';
   document.getElementById('settingCurr').value=cfg.curr||'Rs.';
   document.getElementById('entry_date').value=today();
   refreshDash();
@@ -1398,6 +1429,10 @@ function updateCoName(){
 
 // NAVIGATION
 function showPage(id,el){
+  if(isStaffUser&&!STAFF_ALLOWED_PAGES.includes(id)){
+    id='summary';
+    el=document.querySelector('.nav-item[data-page="summary"]');
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
@@ -1503,13 +1538,16 @@ function renderBalanceMismatch(){
   const card=document.getElementById('balanceMismatchCard');
   const list=document.getElementById('balanceMismatchList');
   if(!card||!list)return;
+  // Opening Balance rows (entries with obRowId) are naturally one-sided on purpose — they are NOT
+  // real mismatches, so they're excluded from this check entirely and never shown on screen.
+  const checkEntries=entries.filter(e=>!e.obRowId);
   // First check: if total CR == total DR, no need to show anything — balanced even if some pairs are one-sided
-  const totalCR=entries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-  const totalDR=entries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+  const totalCR=checkEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
+  const totalDR=checkEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   if(Math.abs(totalCR-totalDR)<0.001){card.style.display='none';return;}
   // group entries by pairId (or its own id if it never had a pair)
   const groups={};
-  entries.forEach(e=>{
+  checkEntries.forEach(e=>{
     const pid=e.pairId||e.id;
     if(!groups[pid])groups[pid]=[];
     groups[pid].push(e);
@@ -3350,6 +3388,14 @@ function exportToGDrive(){
 // SETTINGS
 function saveCompany(){const n=document.getElementById('settingCo').value.trim();if(!n){toast('Naam darain!','error');return;}cfg.company=n;save();updateCoName();toast('Company name save ho gaya! ✅','success');}
 function saveUser(){const u=document.getElementById('settingUser').value.trim();if(!u){toast('Username darain!','error');return;}cfg.user=u;save();toast('Username save ho gaya! ✅','success');}
+function saveStaffLogin(){
+  const su=document.getElementById('settingStaffUser').value.trim();
+  const sp=document.getElementById('settingStaffPass').value;
+  if(!su||!sp){toast('Staff username aur password dono darain!','error');return;}
+  if(su===cfg.user){toast('Staff username admin username jaisa nahi ho sakta!','error');return;}
+  cfg.staffUser=su;cfg.staffPass=sp;save();
+  toast('Staff login save ho gaya! ✅','success');
+}
 function saveCurr(){cfg.curr=document.getElementById('settingCurr').value.trim()||'Rs.';save();toast('Currency save ho gayi! ✅','success');}
 function changePassword(){
   const cur=document.getElementById('pwd_cur').value,nw=document.getElementById('pwd_new').value,conf=document.getElementById('pwd_conf').value;
