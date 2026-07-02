@@ -297,6 +297,7 @@
     <button class="btn-login" onclick="doLogin()" data-i18n="loginBtn" style="margin-top:4px;">🔐 Login</button>
     <div class="login-err" id="loginError" data-i18n="wrongCreds">❌ Wrong username or password!</div>
     <div style="text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin-top:10px;">⚠️ Local login — data sirf is device par rahega</div>
+    <div style="text-align:center;font-size:10.5px;color:rgba(224,168,63,.7);margin-top:12px;font-weight:600;letter-spacing:.3px;">💻 Developed by Najeeb Ullah Afridi</div>
   </div>
 </div>
 
@@ -346,11 +347,9 @@
       <div class="page active" id="page-dashboard">
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Total Accounts</div><div class="stat-value" id="statTotal">0</div></div>
-          <div class="stat-card"><div class="stat-icon">💹</div><div class="stat-label" data-i18n="entryCredit">Total Credit (Entries)</div><div class="stat-value green" id="statCredit">0</div></div>
-          <div class="stat-card"><div class="stat-icon">📉</div><div class="stat-label" data-i18n="entryDebit">Total Debit (Entries)</div><div class="stat-value red" id="statDebit">0</div></div>
-          <div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-label" data-i18n="balance">Balance</div><div class="stat-value" id="statBalance">0</div></div>
-          <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label" data-i18n="balCredit">Total Credit (Balance)</div><div class="stat-value green" id="statBalCredit">0</div></div>
-          <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-label" data-i18n="balDebit">Total Debit (Balance)</div><div class="stat-value red" id="statBalDebit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label" data-i18n="balCredit">Total Credit</div><div class="stat-value green" id="statBalCredit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-label" data-i18n="balDebit">Total Debit</div><div class="stat-value red" id="statBalDebit">0</div></div>
+          <div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-label" data-i18n="balance">Net Balance</div><div class="stat-value" id="statBalance">0</div></div>
         </div>
         <div id="balanceMismatchCard" class="card" style="display:none;border:1px solid #fecaca;background:#fff5f5;">
           <div class="card-header">
@@ -496,6 +495,8 @@
           <div class="card-header">
             <span class="card-title">🏁 Opening Balance</span>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
+              <input type="number" id="obBulkRowCount" class="input" style="width:90px;" placeholder="Number" min="1">
+              <button class="btn btn-gold btn-sm" onclick="obAddBulkRows()">➕ Add Rows</button>
               <button class="btn btn-primary btn-sm" onclick="printOb()">🖨️ Print</button>
             </div>
           </div>
@@ -847,11 +848,10 @@
             <div><div class="setting-label" data-i18n="passwordChange">🔐 Password Change</div><div class="setting-desc" data-i18n="passwordChangeDesc">Login password update karein</div></div>
             <button class="btn btn-outline btn-sm" onclick="openModal('pwdModal')" data-i18n="changePassword">Change Password</button>
           </div>
-          <div class="setting-item">
-            <div><div class="setting-label">👤 Staff Login (Restricted)</div><div class="setting-desc">Yeh login sirf <b>Summary</b> aur <b>Print</b> page dekh sakta hai — baqi kuch bhi nahi.</div></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <input type="text" class="input" id="settingStaffUser" style="width:120px;" placeholder="Staff username">
-              <input type="text" class="input" id="settingStaffPass" style="width:120px;" placeholder="Staff password">
+          <div class="setting-item" style="flex-direction:column;align-items:stretch;">
+            <div style="margin-bottom:10px;"><div class="setting-label">👥 Staff Logins (Restricted) — 5 Users Tak</div><div class="setting-desc">Yeh logins sirf <b>Summary</b> aur <b>Print</b> page dekh sakte hain — baqi kuch bhi nahi. Khali chhoṛ dein jo user use nahi karna.</div></div>
+            <div id="staffLoginRows" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div style="margin-top:10px;">
               <button class="btn btn-primary btn-sm" onclick="saveStaffLogin()" data-i18n="save">Save</button>
             </div>
           </div>
@@ -868,6 +868,9 @@
           </div>
           <div style="margin-top:16px;padding:12px;background:#f1f5f9;border-radius:10px;font-size:12px;color:var(--text-light);">
             App Version: 2.0 | Farman &amp; Brothers Cargo Service Accounting System
+          </div>
+          <div style="margin-top:10px;padding:12px;background:linear-gradient(135deg,rgba(193,127,14,.08),rgba(15,43,77,.05));border:1px solid var(--border);border-radius:10px;font-size:12.5px;color:var(--primary);font-weight:700;text-align:center;letter-spacing:.2px;">
+            💻 Developed by Najeeb Ullah Afridi
           </div>
         </div>
       </div>
@@ -984,9 +987,9 @@ const I18N = {
     navMain:"Main", navDashboard:"Dashboard", navAccounts:"Accounts", navCashbook:"Cashbook",
     navAccountsList:"Accounts List", navReports:"Reports", navSummary:"Summary", navPrint:"Print",
     navSystem:"System", navBackup:"Backup", navSettings:"Settings",
-    totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Balance",
+    totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Net Balance",
     entryCredit:"Total Credit (Entries)", entryDebit:"Total Debit (Entries)",
-    balCredit:"Total Credit (Balance)", balDebit:"Total Debit (Balance)",
+    balCredit:"Total Credit", balDebit:"Total Debit",
     totalBalanceAllAcc:"Total Balance (All Accounts)",
     allAccounts:"👥 All Accounts", topAccounts:"👥 Top Accounts", viewAll:"View All →", noAccountsYet:"No accounts yet",
     cashbookNewEntries:"📒 Cashbook — New Entries", cashbookAddHint:"Add as many rows as you need",
@@ -1034,9 +1037,9 @@ const I18N = {
     navMain:"Main", navDashboard:"Dashboard", navAccounts:"Accounts", navCashbook:"Cashbook",
     navAccountsList:"Accounts List", navReports:"Reports", navSummary:"Summary", navPrint:"Print",
     navSystem:"System", navBackup:"Backup", navSettings:"Settings",
-    totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Balance",
+    totalEntries:"Total Entries", totalCredit:"Total Credit", totalDebit:"Total Debit", balance:"Net Balance",
     entryCredit:"Total Credit (Entries)", entryDebit:"Total Debit (Entries)",
-    balCredit:"Total Credit (Balance)", balDebit:"Total Debit (Balance)",
+    balCredit:"Total Credit", balDebit:"Total Debit",
     totalBalanceAllAcc:"Total Balance (Sare Accounts)",
     allAccounts:"👥 Sare Accounts", topAccounts:"👥 Top Accounts", viewAll:"Sab Dekhain →", noAccountsYet:"Abhi koi account nahi",
     cashbookNewEntries:"📒 Cashbook — Nayi Entries", cashbookAddHint:"Jitni chahein rows add karein",
@@ -1084,9 +1087,9 @@ const I18N = {
     navMain:"مین", navDashboard:"ڈیش بورڈ", navAccounts:"اکاؤنٹس", navCashbook:"کیش بک",
     navAccountsList:"اکاؤنٹس کی فہرست", navReports:"رپورٹس", navSummary:"خلاصہ", navPrint:"پرنٹ",
     navSystem:"سسٹم", navBackup:"بیک اپ", navSettings:"سیٹنگز",
-    totalEntries:"کل اندراجات", totalCredit:"کل کریڈٹ", totalDebit:"کل ڈیبٹ", balance:"بیلنس",
+    totalEntries:"کل اندراجات", totalCredit:"کل کریڈٹ", totalDebit:"کل ڈیبٹ", balance:"خالص بیلنس",
     entryCredit:"کل کریڈٹ (اندراجات)", entryDebit:"کل ڈیبٹ (اندراجات)",
-    balCredit:"کل کریڈٹ (بیلنس)", balDebit:"کل ڈیبٹ (بیلنس)",
+    balCredit:"کل کریڈٹ", balDebit:"کل ڈیبٹ",
     totalBalanceAllAcc:"کل بیلنس (تمام اکاؤنٹس)",
     allAccounts:"👥 تمام اکاؤنٹس", topAccounts:"👥 اہم اکاؤنٹس", viewAll:"سب دیکھیں →", noAccountsYet:"ابھی کوئی اکاؤنٹ نہیں",
     cashbookNewEntries:"📒 کیش بک — نئے اندراجات", cashbookAddHint:"جتنی چاہیں قطاریں شامل کریں",
@@ -1352,13 +1355,14 @@ document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click
 // LOGIN
 function doLogin(){
   const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;
+  const staffMatch=(cfg.staffUsers||[]).find(s=>s.user&&u===s.user&&p===s.pass);
   if(u===cfg.user&&p===cfg.pass){
     isStaffUser=false;
     document.getElementById('loginPage').style.display='none';
     document.getElementById('mainApp').style.display='block';
     applyUserRestrictions();
     initApp();
-  }else if(cfg.staffUser&&u===cfg.staffUser&&p===cfg.staffPass){
+  }else if(staffMatch){
     isStaffUser=true;
     document.getElementById('loginPage').style.display='none';
     document.getElementById('mainApp').style.display='block';
@@ -1398,13 +1402,34 @@ function initApp(){
   document.getElementById('currentDate').textContent=new Date().toLocaleDateString('en-PK',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
   document.getElementById('settingCo').value=cfg.company;
   document.getElementById('settingUser').value=cfg.user;
-  if(document.getElementById('settingStaffUser'))document.getElementById('settingStaffUser').value=cfg.staffUser||'';
-  if(document.getElementById('settingStaffPass'))document.getElementById('settingStaffPass').value=cfg.staffPass||'';
+  // Migrate old single staff login (cfg.staffUser/staffPass) into the new 5-user array, once.
+  if(!cfg.staffUsers){
+    cfg.staffUsers=[];
+    if(cfg.staffUser){cfg.staffUsers.push({user:cfg.staffUser,pass:cfg.staffPass||''});}
+    save();
+  }
+  renderStaffLoginRows();
   document.getElementById('settingCurr').value=cfg.curr||'Rs.';
   document.getElementById('entry_date').value=today();
   refreshDash();
   updateAccLists();
   checkDuplicatePaidNos();
+}
+const STAFF_USER_LIMIT=5;
+function renderStaffLoginRows(){
+  const wrap=document.getElementById('staffLoginRows');
+  if(!wrap)return;
+  const rows=cfg.staffUsers||[];
+  let html='';
+  for(let i=0;i<STAFF_USER_LIMIT;i++){
+    const r=rows[i]||{user:'',pass:''};
+    html+=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:11px;color:var(--text-light);width:16px;">${i+1}.</span>
+      <input type="text" class="input" data-staff-idx="${i}" data-staff-field="user" style="width:150px;" placeholder="Staff username" value="${r.user||''}">
+      <input type="text" class="input" data-staff-idx="${i}" data-staff-field="pass" style="width:150px;" placeholder="Staff password" value="${r.pass||''}">
+    </div>`;
+  }
+  wrap.innerHTML=html;
 }
 function checkDuplicatePaidNos(){
   // Warn (once per load) if existing data already has two paid accounts sharing the same Paid No —
@@ -1473,13 +1498,9 @@ function startAllAccountsScroll(){
   },80);
 }
 function refreshDash(){
-  // Entry-level totals — raw sum of every CR entry and every DR entry (no netting per account).
-  let entryCR=0,entryDR=0;
-  entries.forEach(e=>{if(e.type==='CR')entryCR+=e.amount;else entryDR+=e.amount;});
-
   // Per-account net balance → sum CR-positive accounts and DR-negative accounts.
   // This is the "account balance" total: each account's own balance (CR or DR) added
-  // together separately — NOT the same as the raw entry totals above.
+  // together separately, then a single net balance (the difference) shown too.
   const accBal={};
   entries.forEach(e=>{
     if(!accBal[e.name])accBal[e.name]=0;
@@ -1491,8 +1512,6 @@ function refreshDash(){
   // Total Accounts count (unique account names from accounts list + any entry-only names)
   const allAccNames=new Set([...accounts.map(a=>a.name),...entries.map(e=>e.name)]);
   document.getElementById('statTotal').textContent=allAccNames.size;
-  document.getElementById('statCredit').textContent=fmt(entryCR);
-  document.getElementById('statDebit').textContent=fmt(entryDR);
   document.getElementById('statBalCredit').textContent=fmt(balCR);
   document.getElementById('statBalDebit').textContent=fmt(balDR);
   const bEl=document.getElementById('statBalance');
@@ -2728,6 +2747,17 @@ function obEnsureMinRows(rows){
   }
   return rows;
 }
+// User daale hue number jitni naye khali rows ek sath add karta hai (Opening Balance page).
+function obAddBulkRows(){
+  const inp=document.getElementById('obBulkRowCount');
+  const n=parseInt(inp.value,10);
+  if(!n||n<1){toast('Pehle rows ki tadaad darain!','error');return;}
+  const realCount=obRows.length;
+  obDesiredBlankCount=Math.max(OB_MIN_ROWS,realCount+n);
+  inp.value='';
+  renderObEntries();
+  toast(n+' nayi rows add ho gayin! ✅','success');
+}
 
 // If `name` doesn't already exist anywhere, create it: as a Paid Account (with `paidNo`) when a Paid No
 // was given on this row, otherwise as a normal Account. Existing names (either list) are left untouched.
@@ -3389,12 +3419,27 @@ function exportToGDrive(){
 function saveCompany(){const n=document.getElementById('settingCo').value.trim();if(!n){toast('Naam darain!','error');return;}cfg.company=n;save();updateCoName();toast('Company name save ho gaya! ✅','success');}
 function saveUser(){const u=document.getElementById('settingUser').value.trim();if(!u){toast('Username darain!','error');return;}cfg.user=u;save();toast('Username save ho gaya! ✅','success');}
 function saveStaffLogin(){
-  const su=document.getElementById('settingStaffUser').value.trim();
-  const sp=document.getElementById('settingStaffPass').value;
-  if(!su||!sp){toast('Staff username aur password dono darain!','error');return;}
-  if(su===cfg.user){toast('Staff username admin username jaisa nahi ho sakta!','error');return;}
-  cfg.staffUser=su;cfg.staffPass=sp;save();
-  toast('Staff login save ho gaya! ✅','success');
+  const rows=[];
+  const seen={};
+  for(let i=0;i<STAFF_USER_LIMIT;i++){
+    const uEl=document.querySelector(`[data-staff-idx="${i}"][data-staff-field="user"]`);
+    const pEl=document.querySelector(`[data-staff-idx="${i}"][data-staff-field="pass"]`);
+    const su=uEl?uEl.value.trim():'';
+    const sp=pEl?pEl.value:'';
+    if(!su&&!sp)continue; // row left empty — skip
+    if(!su||!sp){toast(`Staff #${i+1}: username aur password dono darain!`,'error');return;}
+    if(su===cfg.user){toast(`Staff #${i+1}: username admin username jaisa nahi ho sakta!`,'error');return;}
+    if(seen[su]){toast(`Staff username "${su}" do dafa istemal hua hai!`,'error');return;}
+    seen[su]=true;
+    rows.push({user:su,pass:sp});
+  }
+  cfg.staffUsers=rows;
+  // keep legacy fields in sync for any old code paths
+  cfg.staffUser=rows[0]?rows[0].user:'';
+  cfg.staffPass=rows[0]?rows[0].pass:'';
+  save();
+  renderStaffLoginRows();
+  toast('Staff logins save ho gaye! ✅','success');
 }
 function saveCurr(){cfg.curr=document.getElementById('settingCurr').value.trim()||'Rs.';save();toast('Currency save ho gayi! ✅','success');}
 function changePassword(){
