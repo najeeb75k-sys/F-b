@@ -328,6 +328,7 @@
       <div class="nav-sec" data-i18n="navAccounts">Accounts</div>
       <div class="nav-item" onclick="showPage('autoEntry',this)"><span>📒</span> <span data-i18n="navCashbook">Cashbook</span></div>
       <div class="nav-item" onclick="showPage('tpEntry',this)"><span>⚖️</span> <span>Party & Paid Entry</span></div>
+      <div class="nav-item" onclick="showPage('obEntry',this)"><span>🏁</span> <span>Opening Balance</span></div>
       <div class="nav-item" onclick="showPage('accounts',this)"><span>👥</span> <span data-i18n="navAccountsList">Accounts List</span></div>
       <div class="nav-item" onclick="showPage('paidAccounts',this)"><span>💳</span> <span>Paid Accounts</span></div>
       <div class="nav-sec" data-i18n="navReports">Reports</div>
@@ -486,6 +487,49 @@
             </table>
           </div>
           <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="tpEntryTotals"></div>
+        </div>
+      </div>
+
+      <!-- OPENING BALANCE -->
+      <div class="page" id="page-obEntry">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🏁 Opening Balance</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
+              <button class="btn btn-primary btn-sm" onclick="printOb()">🖨️ Print</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
+            ✏️ Sirf pehli baar apne register ka <b>starting/opening balance</b> yahan daalne ke liye. Account ka naam type karein — agar woh <b>Accounts List</b> ya <b>Paid Accounts</b> mein pehle se hai to seedha wahan chala jayega, warna <b>khud-bakhud naya account ban jayega</b> (agar Paid No diya ho to Paid Account, warna normal account). Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai.
+          </div>
+          <div class="tbl-wrap">
+            <table style="table-layout:fixed;min-width:980px;">
+              <colgroup>
+                <col style="width:34px;">
+                <col style="width:120px;">
+                <col style="width:160px;">
+                <col style="width:100px;">
+                <col style="width:160px;">
+                <col style="width:100px;">
+                <col style="width:160px;">
+                <col style="width:100px;">
+                <col style="width:40px;">
+              </colgroup>
+              <thead><tr>
+                <th>#</th>
+                <th data-i18n="date">Date</th>
+                <th style="color:#fca5a5;">Debit Account</th>
+                <th style="color:#fca5a5;">Debit Amount</th>
+                <th style="color:#86efac;">Credit Account</th>
+                <th style="color:#86efac;">Credit Amount</th>
+                <th>Description</th>
+                <th style="color:#e8a020;">Paid No</th>
+                <th class="no-print"></th>
+              </tr></thead>
+              <tbody id="obEntryBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="obEntryTotals"></div>
         </div>
       </div>
 
@@ -1165,9 +1209,10 @@ function attachCloudSync(){
       paidAccounts=data.paidAccounts||paidAccounts;
       paidEntries=data.paidEntries||paidEntries;
       tpRows=data.tpRows||tpRows;
+      obRows=data.obRows||obRows;
       if(data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
       DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
-      DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);
+      DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);
       // refresh whichever page is open so the other device's edits appear instantly
       refreshDash();
       if(document.getElementById('page-autoEntry')?.classList.contains('active')){
@@ -1181,6 +1226,10 @@ function attachCloudSync(){
         if(tpHasActiveFocus()){tpRemoteRenderPending=true;}
         else{renderTpEntries();}
       }
+      if(document.getElementById('page-obEntry')?.classList.contains('active')){
+        if(obHasActiveFocus()){obRemoteRenderPending=true;}
+        else{renderObEntries();}
+      }
       if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
       if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
       if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
@@ -1190,7 +1239,7 @@ function attachCloudSync(){
       setSyncBadge('connected');
     }else{
       // first time this Google account signs in — push ALL current local data up as the seed
-      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows});
+      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows,obRows});
     }
   }, err=>{
     console.error('Firestore listen error',err);
@@ -1208,7 +1257,7 @@ let fbPushTimer=null, fbPendingFields=null;
 function pushToCloud(fields){
   if(!fbUser||!fbDb)return;
   if(fbApplyingRemote)return; // don't echo back data we just received
-  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows});
+  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows,obRows});
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
@@ -1242,6 +1291,7 @@ let paidAccounts = DB.get("cargo_paid_accounts",[]);
 let paidEntries = DB.get("cargo_paid_entries",[]);
 let currentPaidAccId = null;
 let tpRows = DB.get("cargo_tp_rows",[]);
+let obRows = DB.get("cargo_ob_rows",[]);
 
 // HELPERS
 function uid(){return Date.now().toString(36)+Math.random().toString(36).substr(2);}
@@ -1281,6 +1331,7 @@ function today(){return new Date().toISOString().split('T')[0];}
 function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
 function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
 function saveTp(){DB.set('cargo_tp_rows',tpRows);DB.set('cargo_entries',entries);pushToCloud({tpRows,entries});}
+function saveOb(){DB.set('cargo_ob_rows',obRows);DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);pushToCloud({obRows,entries,accounts});}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3000);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1355,6 +1406,7 @@ function showPage(id,el){
   if(id==='dashboard')refreshDash();
   if(id==='autoEntry'){renderCashbook();}
   if(id==='tpEntry'){renderTpEntries();}
+  if(id==='obEntry'){renderObEntries();}
   if(id==='accounts')renderAccounts();
   if(id==='summary')renderSummary();
   if(id==='backup'){renderRecycleBin();}
@@ -1777,9 +1829,10 @@ function cbAttachFocusGuard(){
 
 function cbRowsFromEntries(){
   // group entries by pairId; entries without a pairId (legacy / single entries) become DR-only or CR-only rows
-  // (entries auto-generated by the Party & Paid Entry page carry tpRowId — they belong to that page's own grid, not this one)
+  // (entries auto-generated by the Party & Paid Entry page carry tpRowId, and Opening Balance entries carry
+  // obRowId — they belong to their own page's grid, not this one, but still count in Accounts List balances)
   const map={};
-  entries.filter(e=>!e.tpRowId).forEach(e=>{
+  entries.filter(e=>!e.tpRowId && !e.obRowId).forEach(e=>{
     const pid=e.pairId||e.id;
     if(!map[pid])map[pid]={pairId:pid,date:e.date,dr:null,cr:null};
     if(e.type==='DR')map[pid].dr=e; else map[pid].cr=e;
@@ -2585,6 +2638,314 @@ function printTp(){
   window.print();
 }
 
+// ===== OPENING BALANCE =====
+// One-time page to seed starting balances of a whole register. Unlike Cashbook/TP Entry, it does NOT
+// reject unknown account names — it auto-creates them (as a normal Account, or as a Paid Account when a
+// Paid No is given for that row), then posts a normal DR/CR ledger entry pair like Cashbook does.
+const OB_MIN_ROWS=15;
+let obBlankPool=[];
+let obPendingDates={};
+let obDesiredBlankCount=OB_MIN_ROWS;
+let obRemoteRenderPending=false;
+let obFocusGuardAttached=false;
+const OB_FIELD_ORDER=['date','debitAcc','debitAmt','creditAcc','creditAmt','desc','paidNo'];
+
+function obHasActiveFocus(){
+  const el=document.activeElement;
+  const tbody=document.getElementById('obEntryBody');
+  return !!(el && tbody && tbody.contains(el));
+}
+function obAttachFocusGuard(){
+  if(obFocusGuardAttached)return;
+  const tbody=document.getElementById('obEntryBody');
+  if(!tbody)return;
+  obFocusGuardAttached=true;
+  tbody.addEventListener('focusout',()=>{
+    setTimeout(()=>{
+      if(obRemoteRenderPending && !obHasActiveFocus()){
+        obRemoteRenderPending=false;
+        renderObEntries();
+      }
+    },50);
+  });
+}
+
+function obEnsureMinRows(rows){
+  const realCount=rows.length;
+  if(obDesiredBlankCount<OB_MIN_ROWS)obDesiredBlankCount=OB_MIN_ROWS;
+  const blanksNeeded=Math.max(0,obDesiredBlankCount-realCount);
+  const realIds=new Set(rows.map(r=>r.id));
+  obBlankPool=obBlankPool.filter(id=>{
+    if(realIds.has(id)){delete obPendingDates[id];return false;}
+    return true;
+  });
+  while(obBlankPool.length<blanksNeeded){obBlankPool.push('newob_'+uid());}
+  if(obBlankPool.length>blanksNeeded){
+    const removed=obBlankPool.splice(blanksNeeded);
+    removed.forEach(id=>delete obPendingDates[id]);
+  }
+  for(let i=0;i<blanksNeeded;i++){
+    const id=obBlankPool[i];
+    rows.push({id,date:obPendingDates[id]||'',debitAcc:'',debitAmt:'',creditAcc:'',creditAmt:'',desc:'',paidNo:'',blank:true});
+  }
+  return rows;
+}
+
+// If `name` doesn't already exist anywhere, create it: as a Paid Account (with `paidNo`) when a Paid No
+// was given on this row, otherwise as a normal Account. Existing names (either list) are left untouched.
+function obEnsureAccountExists(name,paidNo){
+  const val=String(name||'').trim();
+  if(!val)return;
+  if(accounts.find(a=>a.name.toLowerCase()===val.toLowerCase()))return;
+  if(paidAccounts.find(a=>a.name.toLowerCase()===val.toLowerCase()))return;
+  const pno=String(paidNo||'').trim();
+  if(pno && !paidAccounts.find(a=>a.paidNo===pno)){
+    paidAccounts.push({id:uid(),name:val,paidNo:pno,phone:''});
+    savePaid();
+    toast(`"${val}" naya Paid Account ban gaya! 💳`,'success');
+  }else{
+    accounts.push({id:uid(),name:val,phone:'',address:''});
+    save();
+    toast(`"${val}" naya Account ban gaya! ✅`,'success');
+  }
+}
+
+// Builds/updates the DR+CR ledger entry pair for one Opening Balance row, and links whichever side
+// (if any) matches a Paid Account with this row's Paid No into the Paid Accounts ledger too.
+function obSyncRowEntries(row){
+  obEnsureAccountExists(row.debitAcc,row.paidNo);
+  obEnsureAccountExists(row.creditAcc,row.paidNo);
+
+  function makeOrUpdate(role,side,name,amount){
+    const eid=row.id+'_'+role;
+    let e=entries.find(x=>x.id===eid);
+    const amt=parseFloat(amount)||0;
+    const valid=name && String(name).trim() && amt>0;
+    if(!valid){
+      if(e)entries=entries.filter(x=>x.id!==eid);
+      return;
+    }
+    if(!e){e={id:eid,obRowId:row.id,obRole:role};entries.push(e);}
+    e.date=row.date||today();
+    e.name=String(name).trim();
+    e.type=side;
+    e.amount=amt;
+    e.desc=row.desc||'Opening Balance';
+    e.ref='';
+  }
+  makeOrUpdate('debit','DR',row.debitAcc,row.debitAmt);
+  makeOrUpdate('credit','CR',row.creditAcc,row.creditAmt);
+
+  obLinkPaidAccount(row,'debit',row.debitAcc);
+  obLinkPaidAccount(row,'credit',row.creditAcc);
+}
+
+function obLinkPaidAccount(row,role,accName){
+  const eid=row.id+'_'+role;
+  const e=entries.find(x=>x.id===eid);
+  const pno=String(row.paidNo||'').trim();
+  const paidAcc=pno ? paidAccounts.find(a=>a.paidNo===pno) : null;
+  const matchesThisSide=paidAcc && accName && paidAcc.name.toLowerCase()===String(accName).trim().toLowerCase();
+  const existingLink=paidEntries.find(pe=>pe.cashbookRef===eid);
+  if(e && matchesThisSide){
+    if(!existingLink){
+      paidEntries.push({id:uid(),paidAccId:paidAcc.id,cashbookRef:eid,date:e.date,type:e.type,amount:e.amount,desc:e.desc,ref:e.ref});
+    }else{
+      existingLink.paidAccId=paidAcc.id;existingLink.date=e.date;existingLink.amount=e.amount;existingLink.desc=e.desc;existingLink.ref=e.ref;
+    }
+    savePaid();
+  }else if(existingLink){
+    paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==eid);
+    savePaid();
+  }
+}
+
+function obRemoveGeneratedEntries(rid){
+  const linkedIds=entries.filter(e=>e.obRowId===rid).map(e=>e.id);
+  entries=entries.filter(e=>e.obRowId!==rid);
+  if(linkedIds.length){
+    const before=paidEntries.length;
+    paidEntries=paidEntries.filter(pe=>!linkedIds.includes(pe.cashbookRef));
+    if(paidEntries.length!==before)savePaid();
+  }
+}
+
+function obUpsertField(rid,field,value){
+  let row=obRows.find(r=>r.id===rid);
+  if(field==='date'){
+    if(!row){obPendingDates[rid]=value;return;}
+    row.date=value;
+    obSyncRowEntries(row);
+    saveOb();
+    return;
+  }
+  if(!row){
+    row={id:rid,date:obPendingDates[rid]||today(),debitAcc:'',debitAmt:0,creditAcc:'',creditAmt:0,desc:'',paidNo:''};
+    obRows.push(row);
+    delete obPendingDates[rid];
+  }
+  row[field]=value;
+  const isEmpty=!String(row.debitAcc||'').trim() && !String(row.creditAcc||'').trim() &&
+    !String(row.desc||'').trim() && !String(row.paidNo||'').trim() &&
+    !row.debitAmt && !row.creditAmt;
+  if(isEmpty){
+    obRemoveGeneratedEntries(rid);
+    obRows=obRows.filter(r=>r.id!==rid);
+    saveOb();
+    return;
+  }
+  obSyncRowEntries(row);
+  saveOb();
+}
+
+function renderObEntries(){
+  obAttachFocusGuard();
+  let rows=obRows.map(r=>({...r}));
+  rows.sort((a,b)=>{
+    if(!a.date&&!b.date)return 0;
+    if(!a.date)return 1;
+    if(!b.date)return -1;
+    return new Date(a.date)-new Date(b.date);
+  });
+  obEnsureMinRows(rows);
+
+  const tbody=document.getElementById('obEntryBody');
+  if(!tbody)return;
+
+  const acctNames=[...new Set([...accounts.map(a=>a.name),...paidAccounts.map(a=>a.name)])];
+
+  tbody.innerHTML=rows.map((r,i)=>{
+    const isLast=(i===rows.length-1);
+    const isReal=obRows.some(x=>x.id===r.id);
+    return `<tr data-rid="${r.id}">
+      <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
+      <td class="cbcell cb-date-cell"><input type="date" class="cbcell-input" value="${r.date||''}" data-field="date" data-rid="${r.id}" onchange="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-debit"><input type="text" placeholder="Debit Account" value="${r.debitAcc||''}" data-field="debitAcc" data-rid="${r.id}" list="obAccList" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${r.debitAmt||''}" data-field="debitAmt" data-rid="${r.id}" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-credit"><input type="text" placeholder="Credit Account" value="${r.creditAcc||''}" data-field="creditAcc" data-rid="${r.id}" list="obAccList" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${r.creditAmt||''}" data-field="creditAmt" data-rid="${r.id}" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell"><input type="text" placeholder="Description" value="${r.desc||''}" data-field="desc" data-rid="${r.id}" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"></td>
+      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${r.paidNo||''}" data-field="paidNo" data-rid="${r.id}" list="obPaidNoList" onblur="obFieldChange(this)" onkeydown="obKeyHandler(event,this,${isLast})" style="color:#e8a020;font-weight:600;"></td>
+      <td class="no-print" style="text-align:center;">${isReal?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="obDeleteRow('${r.id}')">🗑️</button>`:''}</td>
+    </tr>`;
+  }).join('') + `<datalist id="obAccList">${acctNames.map(n=>`<option value="${n}">`).join('')}</datalist><datalist id="obPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
+
+  obUpdateTotalsOnly();
+}
+
+function obUpdateTotalsOnly(){
+  const tDebit=obRows.reduce((s,r)=>s+(parseFloat(r.debitAmt)||0),0);
+  const tCredit=obRows.reduce((s,r)=>s+(parseFloat(r.creditAmt)||0),0);
+  const el=document.getElementById('obEntryTotals');
+  if(!el)return;
+  const balance=tDebit-tCredit;
+  const balColor=Math.abs(balance)<0.005 ? '#16a34a' : '#dc2626';
+  el.innerHTML='Debit: '+fmt(tDebit)+' | Credit: '+fmt(tCredit)+' | <span style="color:'+balColor+'">Balance: '+fmt(balance)+'</span>';
+}
+
+function obFieldChange(el){
+  const rid=el.getAttribute('data-rid');
+  const field=el.getAttribute('data-field');
+  const value=el.value;
+  const row=el.closest('tr');
+  const wasBlank=row && !row.querySelector('.btn-danger');
+
+  if(field==='date'){
+    if(!value){return;}
+    obUpsertField(rid,'date',value);
+  }else if(['debitAmt','creditAmt'].includes(field)){
+    if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
+    obUpsertField(rid,field,parseFloat(value)||0);
+  }else{
+    obUpsertField(rid,field,value);
+  }
+
+  const stillHasData=obRows.some(r=>r.id===rid);
+  if((wasBlank && stillHasData) || (!wasBlank && !stillHasData)){
+    renderObEntries();
+  }else{
+    obUpdateTotalsOnly();
+  }
+  refreshDash();
+}
+
+function obFindInput(rid,field){return document.querySelector(`#obEntryBody input[data-rid="${rid}"][data-field="${field}"]`);}
+function obGetRowIds(){return [...document.querySelectorAll('#obEntryBody tr')].map(r=>r.getAttribute('data-rid'));}
+function obFocusCell(rid,colIdx){
+  if(!rid)return false;
+  const field=OB_FIELD_ORDER[colIdx];
+  if(!field)return false;
+  const inp=obFindInput(rid,field);
+  if(inp){inp.focus();if(inp.select)inp.select();return true;}
+  return false;
+}
+function obKeyHandler(ev,el,isLastRow){
+  const rid=el.getAttribute('data-rid');
+  const field=el.getAttribute('data-field');
+  const colIdx=OB_FIELD_ORDER.indexOf(field);
+  const rids=obGetRowIds();
+  const rowIdx=rids.indexOf(rid);
+  const hasDatalist=!!el.getAttribute('list');
+
+  if(ev.key==='Enter'){
+    ev.preventDefault();
+    el.blur();
+    if(isLastRow){
+      obDesiredBlankCount++;
+      setTimeout(()=>{
+        renderObEntries();
+        const allRows=document.querySelectorAll('#obEntryBody tr');
+        const newRow=allRows[allRows.length-1];
+        if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
+      },10);
+    }else{
+      setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+    }
+    return;
+  }
+  if(el.type==='date'||hasDatalist)return;
+  if(ev.key==='ArrowDown'){
+    ev.preventDefault();el.blur();
+    setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+  }else if(ev.key==='ArrowUp'){
+    if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rids[rowIdx-1],colIdx),10);}
+  }else if(ev.key==='ArrowRight'){
+    let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
+    if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx+1),10);}
+  }else if(ev.key==='ArrowLeft'){
+    let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
+    if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx-1),10);}
+  }
+}
+
+function obDeleteRow(rid){
+  if(!confirm('Yeh poori row delete karna chahte hain? (Iski ledger entries bhi Recycle Bin mein jayengi)'))return;
+  const linked=entries.filter(e=>e.obRowId===rid);
+  linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
+  if(linked.length)DB.set('cargo_recycle',recycleBin);
+  obRemoveGeneratedEntries(rid);
+  obRows=obRows.filter(r=>r.id!==rid);
+  saveOb();save();renderObEntries();refreshDash();
+  toast('Opening Balance row delete ho gayi (entries Recycle Bin mein) ↩️','');
+}
+
+function printOb(){
+  const rows=obRows.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const rowsHtml=rows.map((r,i)=>`<tr>
+    <td>${i+1}</td><td>${r.date||''}</td><td>${r.debitAcc||''}</td><td style="color:#dc2626;">${fmt(r.debitAmt||0)}</td>
+    <td>${r.creditAcc||''}</td><td style="color:#15803d;">${fmt(r.creditAmt||0)}</td><td>${r.desc||''}</td><td>${r.paidNo||''}</td>
+  </tr>`).join('');
+  const tDebit=rows.reduce((s,r)=>s+(parseFloat(r.debitAmt)||0),0);
+  const tCredit=rows.reduce((s,r)=>s+(parseFloat(r.creditAmt)||0),0);
+  document.getElementById('printArea').innerHTML=`
+    <div class="print-hdr"><h1>${cfg.company}</h1><p>Opening Balance Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
+    <table><thead><tr><th>#</th><th>Date</th><th>Debit Account</th><th>Debit</th><th>Credit Account</th><th>Credit</th><th>Description</th><th>Paid No</th></tr></thead>
+    <tbody>${rowsHtml||'<tr><td colspan="8" style="text-align:center;">No entries</td></tr>'}</tbody>
+    <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tDebit)}</td><td></td><td style="color:#15803d;">${fmt(tCredit)}</td><td colspan="2"></td></tr></tfoot>
+    </table>`;
+  window.print();
+}
+
 // ===== RECYCLE BIN =====
 let recycleBin=DB.get('cargo_recycle',[]);
 function renderRecycleBin(){
@@ -2946,7 +3307,7 @@ function doPrint(){
 
 // BACKUP
 function exportData(){
-  const d={entries,accounts,paidAccounts,paidEntries,tpRows,cfg,recycleBin,exportedAt:new Date().toISOString()};
+  const d={entries,accounts,paidAccounts,paidEntries,tpRows,obRows,cfg,recycleBin,exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='farman-cargo-backup-'+today()+'.json';a.click();
   toast('Backup file download ho rahi hai! 💾','success');
@@ -2955,10 +3316,11 @@ function importData(ev){
   const file=ev.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=function(e){try{const d=JSON.parse(e.target.result);
-    if(confirm(`Backup restore karain?\n\nEntries: ${d.entries?.length||0}\nAccounts: ${d.accounts?.length||0}\nPaid Accounts: ${d.paidAccounts?.length||0}\nPaid Entries: ${d.paidEntries?.length||0}\n\nCurrent data replace ho jayega!`)){
+    if(confirm(`Backup restore karain?\n\nEntries: ${d.entries?.length||0}\nAccounts: ${d.accounts?.length||0}\nPaid Accounts: ${d.paidAccounts?.length||0}\nPaid Entries: ${d.paidEntries?.length||0}\nOpening Balance Rows: ${d.obRows?.length||0}\n\nCurrent data replace ho jayega!`)){
       entries=d.entries||[];accounts=d.accounts||[];
       paidAccounts=d.paidAccounts||[];paidEntries=d.paidEntries||[];
       tpRows=d.tpRows||[];DB.set('cargo_tp_rows',tpRows);
+      obRows=d.obRows||[];DB.set('cargo_ob_rows',obRows);
       if(d.cfg)cfg={...cfg,...d.cfg};
       recycleBin=d.recycleBin||[];DB.set('cargo_recycle',recycleBin);
       save();savePaid();initApp();renderPaidAccounts();toast('Restore ho gaya! ✅','success');}}
@@ -2999,7 +3361,7 @@ function changePassword(){
 function clearAll(){
   if(!confirm('KHABARDAR! Sab entries, accounts, paid accounts aur paid entries delete ho jayengi!'))return;
   if(!confirm('Doosri baar confirm karein — yeh action undo nahi hoga!'))return;
-  entries=[];accounts=[];paidAccounts=[];paidEntries=[];tpRows=[];DB.set('cargo_tp_rows',tpRows);save();savePaid();refreshDash();renderPaidAccounts();toast('Sab data delete ho gaya!','');
+  entries=[];accounts=[];paidAccounts=[];paidEntries=[];tpRows=[];obRows=[];DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);save();savePaid();refreshDash();renderPaidAccounts();toast('Sab data delete ho gaya!','');
 }
 
 
