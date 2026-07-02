@@ -192,6 +192,8 @@
   td.cbcell input:focus, td.cbcell .cbcell-input:focus{background:#eff5ff;box-shadow:inset 0 0 0 2px var(--primary-light);}
   td.cbcell.cb-debit input{color:#c92e2e;font-weight:700;font-family:var(--mono);}
   td.cbcell.cb-credit input{color:#0f6b3b;font-weight:700;font-family:var(--mono);}
+  td.cbcell.cb-profit input{color:#9333ea;font-weight:700;font-family:var(--mono);}
+  td.cbcell.cb-tp input{color:#1d4ed8;font-weight:700;font-family:var(--mono);}
   td.cb-date-cell{position:relative;}
   .fill-handle{position:absolute;right:0;bottom:0;width:9px;height:9px;background:var(--primary);border:1px solid #fff;cursor:crosshair;z-index:5;display:none;}
   td.cb-date-cell:hover .fill-handle{display:block;}
@@ -325,6 +327,7 @@
       <div class="nav-item active" onclick="showPage('dashboard',this)"><span>📊</span> <span data-i18n="navDashboard">Dashboard</span></div>
       <div class="nav-sec" data-i18n="navAccounts">Accounts</div>
       <div class="nav-item" onclick="showPage('autoEntry',this)"><span>📒</span> <span data-i18n="navCashbook">Cashbook</span></div>
+      <div class="nav-item" onclick="showPage('tpEntry',this)"><span>⚖️</span> <span>TP Entry</span></div>
       <div class="nav-item" onclick="showPage('accounts',this)"><span>👥</span> <span data-i18n="navAccountsList">Accounts List</span></div>
       <div class="nav-item" onclick="showPage('paidAccounts',this)"><span>💳</span> <span>Paid Accounts</span></div>
       <div class="nav-sec" data-i18n="navReports">Reports</div>
@@ -421,6 +424,68 @@
             </table>
           </div>
           <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="cashbookTotals"></div>
+        </div>
+      </div>
+
+      <!-- TP ENTRY -->
+      <div class="page" id="page-tpEntry">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚖️ TP Entry</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
+              <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="tpSearch" placeholder="Account / ref search..." oninput="renderTpEntries()"></div>
+              <input type="date" id="tpFrom" class="input" style="width:130px;" onchange="renderTpEntries()" title="From date">
+              <input type="date" id="tpTo" class="input" style="width:130px;" onchange="renderTpEntries()" title="To date">
+              <button class="btn btn-outline btn-sm" onclick="tpClear()">↺ Clear Filter</button>
+              <button class="btn btn-primary btn-sm" onclick="printTp()">🖨️ Print</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;" class="no-print">
+            <span style="font-weight:700;font-size:13px;color:#7e22ce;">💰 Profit Account:</span>
+            <select id="tpProfitAccSel" class="input" style="width:220px;" onchange="saveProfitAccount()">
+              <option value="">-- Select Profit Account --</option>
+            </select>
+            <span style="font-size:11px;color:var(--text-light);">Har row ka Profit amount isi account mein credit hoga</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
+            ✏️ Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Ye row se 4 ledger entries khud ban jati hain: Party (Debit), Paid Account (Credit), Profit Account (Credit) aur TP Account (Credit).
+          </div>
+          <div class="tbl-wrap">
+            <table style="table-layout:fixed;min-width:1180px;">
+              <colgroup>
+                <col style="width:34px;">
+                <col style="width:110px;">
+                <col style="width:140px;">
+                <col style="width:90px;">
+                <col style="width:90px;">
+                <col style="width:140px;">
+                <col style="width:90px;">
+                <col style="width:90px;">
+                <col style="width:120px;">
+                <col style="width:90px;">
+                <col style="width:140px;">
+                <col style="width:90px;">
+                <col style="width:40px;">
+              </colgroup>
+              <thead><tr>
+                <th>#</th>
+                <th data-i18n="date">Date</th>
+                <th style="color:#fca5a5;">Party Account</th>
+                <th style="color:#fca5a5;">Debit</th>
+                <th>Ref No</th>
+                <th style="color:#86efac;">Paid Account</th>
+                <th style="color:#86efac;">Credit</th>
+                <th style="color:#e8a020;">Paid No</th>
+                <th>Weight Station</th>
+                <th style="color:#c084fc;">Profit</th>
+                <th style="color:#93c5fd;">TP Account</th>
+                <th style="color:#93c5fd;">TP Amount</th>
+                <th class="no-print"></th>
+              </tr></thead>
+              <tbody id="tpEntryBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="tpEntryTotals"></div>
         </div>
       </div>
 
@@ -1099,9 +1164,10 @@ function attachCloudSync(){
       recycleBin=data.recycleBin||recycleBin;
       paidAccounts=data.paidAccounts||paidAccounts;
       paidEntries=data.paidEntries||paidEntries;
+      tpRows=data.tpRows||tpRows;
       if(data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
       DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
-      DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);
+      DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);
       // refresh whichever page is open so the other device's edits appear instantly
       refreshDash();
       if(document.getElementById('page-autoEntry')?.classList.contains('active')){
@@ -1110,6 +1176,10 @@ function attachCloudSync(){
         // committed yet and the row would never get its date. Defer until they leave that field.
         if(cbHasActiveFocus()){cbRemoteRenderPending=true;}
         else{renderCashbook();}
+      }
+      if(document.getElementById('page-tpEntry')?.classList.contains('active')){
+        if(tpHasActiveFocus()){tpRemoteRenderPending=true;}
+        else{renderTpEntries();}
       }
       if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
       if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
@@ -1120,7 +1190,7 @@ function attachCloudSync(){
       setSyncBadge('connected');
     }else{
       // first time this Google account signs in — push ALL current local data up as the seed
-      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts});
+      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows});
     }
   }, err=>{
     console.error('Firestore listen error',err);
@@ -1138,7 +1208,7 @@ let fbPushTimer=null, fbPendingFields=null;
 function pushToCloud(fields){
   if(!fbUser||!fbDb)return;
   if(fbApplyingRemote)return; // don't echo back data we just received
-  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts});
+  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows});
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
@@ -1171,6 +1241,7 @@ let currentAccDetailId = null;
 let paidAccounts = DB.get("cargo_paid_accounts",[]);
 let paidEntries = DB.get("cargo_paid_entries",[]);
 let currentPaidAccId = null;
+let tpRows = DB.get("cargo_tp_rows",[]);
 
 // HELPERS
 function uid(){return Date.now().toString(36)+Math.random().toString(36).substr(2);}
@@ -1209,6 +1280,7 @@ function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK'
 function today(){return new Date().toISOString().split('T')[0];}
 function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
 function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
+function saveTp(){DB.set('cargo_tp_rows',tpRows);DB.set('cargo_entries',entries);pushToCloud({tpRows,entries});}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3000);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1282,6 +1354,7 @@ function showPage(id,el){
   closeSidebar();
   if(id==='dashboard')refreshDash();
   if(id==='autoEntry'){renderCashbook();}
+  if(id==='tpEntry'){renderTpEntries();}
   if(id==='accounts')renderAccounts();
   if(id==='summary')renderSummary();
   if(id==='backup'){renderRecycleBin();}
@@ -1704,8 +1777,9 @@ function cbAttachFocusGuard(){
 
 function cbRowsFromEntries(){
   // group entries by pairId; entries without a pairId (legacy / single entries) become DR-only or CR-only rows
+  // (entries auto-generated by the TP Entry page carry tpRowId — they belong to that page's own grid, not this one)
   const map={};
-  entries.forEach(e=>{
+  entries.filter(e=>!e.tpRowId).forEach(e=>{
     const pid=e.pairId||e.id;
     if(!map[pid])map[pid]={pairId:pid,date:e.date,dr:null,cr:null};
     if(e.type==='DR')map[pid].dr=e; else map[pid].cr=e;
@@ -2149,6 +2223,360 @@ function cbDragEnd(){
   renderCashbook();
 }
 
+// ===================== TP ENTRY (single row → 4 auto ledger entries) =====================
+// Each TP row is raw data kept in `tpRows`. On every edit it (re)generates up to 4 linked
+// entries inside the main `entries[]` array — tagged tpRowId/tpRole — so Accounts / Dashboard /
+// Summary / Print all pick them up automatically, exactly like any other ledger entry.
+const TP_MIN_ROWS=15;
+let tpBlankPool=[];
+let tpPendingDates={};
+let tpDesiredBlankCount=TP_MIN_ROWS;
+let tpRemoteRenderPending=false;
+let tpFocusGuardAttached=false;
+const TP_FIELD_ORDER=['date','party','debit','refNo','paid','credit','paidNo','weightStation','profit','tpAcc','tpAmount'];
+
+function tpHasActiveFocus(){
+  const el=document.activeElement;
+  const tbody=document.getElementById('tpEntryBody');
+  return !!(el && tbody && tbody.contains(el));
+}
+function tpAttachFocusGuard(){
+  if(tpFocusGuardAttached)return;
+  const tbody=document.getElementById('tpEntryBody');
+  if(!tbody)return;
+  tpFocusGuardAttached=true;
+  tbody.addEventListener('focusout',()=>{
+    setTimeout(()=>{
+      if(tpRemoteRenderPending && !tpHasActiveFocus()){
+        tpRemoteRenderPending=false;
+        renderTpEntries();
+      }
+    },50);
+  });
+}
+
+function tpEnsureMinRows(rows){
+  const realCount=rows.length;
+  if(tpDesiredBlankCount<TP_MIN_ROWS)tpDesiredBlankCount=TP_MIN_ROWS;
+  const blanksNeeded=Math.max(0,tpDesiredBlankCount-realCount);
+  const realIds=new Set(rows.map(r=>r.id));
+  tpBlankPool=tpBlankPool.filter(id=>{
+    if(realIds.has(id)){delete tpPendingDates[id];return false;}
+    return true;
+  });
+  while(tpBlankPool.length<blanksNeeded){tpBlankPool.push('newtp_'+uid());}
+  if(tpBlankPool.length>blanksNeeded){
+    const removed=tpBlankPool.splice(blanksNeeded);
+    removed.forEach(id=>delete tpPendingDates[id]);
+  }
+  for(let i=0;i<blanksNeeded;i++){
+    const id=tpBlankPool[i];
+    rows.push({id,date:tpPendingDates[id]||'',party:'',debit:'',refNo:'',paid:'',credit:'',paidNo:'',weightStation:'',profit:'',tpAcc:'',tpAmount:'',blank:true});
+  }
+  return rows;
+}
+
+// Builds/updates the 4 linked ledger entries for one TP row inside the shared `entries[]` array.
+function tpSyncRowEntries(row){
+  function makeOrUpdate(role,side,name,amount,desc,ref){
+    const eid=row.id+'_'+role;
+    let e=entries.find(x=>x.id===eid);
+    const amt=parseFloat(amount)||0;
+    const valid=name && String(name).trim() && amt>0;
+    if(!valid){
+      if(e)entries=entries.filter(x=>x.id!==eid);
+      return;
+    }
+    if(!e){e={id:eid,tpRowId:row.id,tpRole:role};entries.push(e);}
+    e.date=row.date||today();
+    e.name=String(name).trim();
+    e.type=side;
+    e.amount=amt;
+    e.desc=desc||'';
+    e.ref=ref||'';
+  }
+  const partyDesc=[row.paid,row.weightStation].filter(v=>v&&String(v).trim()).join(' - ');
+  const paidDesc=[row.weightStation,row.party].filter(v=>v&&String(v).trim()).join(' - ');
+  const profitTpDesc=[row.paid,row.party].filter(v=>v&&String(v).trim()).join(' - ');
+
+  makeOrUpdate('party','DR',row.party,row.debit,partyDesc,row.paidNo);
+  makeOrUpdate('paid','CR',row.paid,row.credit,paidDesc,row.refNo);
+  makeOrUpdate('profit','CR',cfg.profitAccount,row.profit,profitTpDesc,row.paidNo);
+  makeOrUpdate('tp','CR',row.tpAcc,row.tpAmount,profitTpDesc,row.paidNo);
+
+  tpLinkPaidAccount(row);
+}
+
+// Mirrors the Paid Account ledger the same way the Cashbook page does — the "paid" side entry
+// (credited via Paid No) shows up inside Paid Accounts too, not just the main Accounts ledger.
+function tpLinkPaidAccount(row){
+  const paidEid=row.id+'_paid';
+  const paidEntryObj=entries.find(e=>e.id===paidEid);
+  const paidAcc=paidAccounts.find(a=>a.paidNo===row.paidNo);
+  const existingLink=paidEntries.find(pe=>pe.cashbookRef===paidEid);
+  if(paidEntryObj && paidAcc){
+    if(!existingLink){
+      paidEntries.push({id:uid(),paidAccId:paidAcc.id,cashbookRef:paidEid,date:paidEntryObj.date,type:'CR',amount:paidEntryObj.amount,desc:paidEntryObj.desc,ref:paidEntryObj.ref});
+    }else{
+      existingLink.paidAccId=paidAcc.id;existingLink.date=paidEntryObj.date;existingLink.amount=paidEntryObj.amount;existingLink.desc=paidEntryObj.desc;existingLink.ref=paidEntryObj.ref;
+    }
+    savePaid();
+  }else if(existingLink){
+    paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==paidEid);
+    savePaid();
+  }
+}
+
+function tpRemoveGeneratedEntries(rid){
+  const linkedIds=entries.filter(e=>e.tpRowId===rid).map(e=>e.id);
+  entries=entries.filter(e=>e.tpRowId!==rid);
+  if(linkedIds.length){
+    const before=paidEntries.length;
+    paidEntries=paidEntries.filter(pe=>!linkedIds.includes(pe.cashbookRef));
+    if(paidEntries.length!==before)savePaid();
+  }
+}
+
+function tpUpsertField(rid,field,value){
+  let row=tpRows.find(r=>r.id===rid);
+  if(field==='date'){
+    if(!row){tpPendingDates[rid]=value;return;}
+    row.date=value;
+    tpSyncRowEntries(row);
+    saveTp();
+    return;
+  }
+  if(!row){
+    row={id:rid,date:tpPendingDates[rid]||today(),party:'',debit:0,refNo:'',paid:'',credit:0,paidNo:'',weightStation:'',profit:0,tpAcc:'',tpAmount:0};
+    tpRows.push(row);
+    delete tpPendingDates[rid];
+  }
+  row[field]=value;
+  const isEmpty=!String(row.party||'').trim() && !String(row.paid||'').trim() && !String(row.tpAcc||'').trim() &&
+    !String(row.weightStation||'').trim() && !String(row.refNo||'').trim() && !String(row.paidNo||'').trim() &&
+    !row.debit && !row.credit && !row.profit && !row.tpAmount;
+  if(isEmpty){
+    tpRemoveGeneratedEntries(rid);
+    tpRows=tpRows.filter(r=>r.id!==rid);
+    saveTp();
+    return;
+  }
+  tpSyncRowEntries(row);
+  saveTp();
+}
+
+function populateProfitAccountSelect(){
+  const sel=document.getElementById('tpProfitAccSel');
+  if(!sel)return;
+  const current=cfg.profitAccount||'';
+  if(document.activeElement===sel)return; // don't yank the dropdown open while user is choosing
+  sel.innerHTML='<option value="">-- Select Profit Account --</option>'+accounts.map(a=>`<option value="${a.name}" ${a.name===current?'selected':''}>${a.name}</option>`).join('');
+}
+function saveProfitAccount(){
+  const sel=document.getElementById('tpProfitAccSel');
+  if(!sel)return;
+  cfg.profitAccount=sel.value;
+  save();
+  tpRows.forEach(r=>tpSyncRowEntries(r)); // re-point every row's profit entry to the newly chosen account
+  save();
+  toast('Profit Account save ho gaya! ✅','success');
+  renderTpEntries();
+  refreshDash();
+}
+
+function renderTpEntries(){
+  tpAttachFocusGuard();
+  populateProfitAccountSelect();
+  const q=(document.getElementById('tpSearch')?.value||'').trim().toLowerCase();
+  const fr=document.getElementById('tpFrom')?.value;
+  const to=document.getElementById('tpTo')?.value;
+
+  let rows=tpRows.map(r=>({...r}));
+  if(q||fr||to){
+    rows=rows.filter(r=>{
+      const hay=[r.party,r.paid,r.tpAcc,r.refNo,r.paidNo,r.weightStation].filter(Boolean).join(' ').toLowerCase();
+      const matchQ=!q||hay.includes(q);
+      const matchFr=!fr||(r.date&&r.date>=fr);
+      const matchTo=!to||(r.date&&r.date<=to);
+      return matchQ&&matchFr&&matchTo;
+    });
+  }
+  rows.sort((a,b)=>{
+    if(!a.date&&!b.date)return 0;
+    if(!a.date)return 1;
+    if(!b.date)return -1;
+    return new Date(a.date)-new Date(b.date);
+  });
+  if(!q&&!fr&&!to){tpEnsureMinRows(rows);}
+
+  const tbody=document.getElementById('tpEntryBody');
+  if(!tbody)return;
+  if(!rows.length){
+    tbody.innerHTML='<tr><td colspan="13" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
+    document.getElementById('tpEntryTotals').textContent='';
+    return;
+  }
+
+  tbody.innerHTML=rows.map((r,i)=>{
+    const isLast=(i===rows.length-1);
+    const isReal=tpRows.some(x=>x.id===r.id);
+    return `<tr data-rid="${r.id}">
+      <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
+      <td class="cbcell cb-date-cell"><input type="date" class="cbcell-input" value="${r.date||''}" data-field="date" data-rid="${r.id}" onchange="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-debit"><input type="text" placeholder="Party Account" value="${r.party||''}" data-field="party" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${r.debit||''}" data-field="debit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell"><input type="text" placeholder="Ref No" value="${r.refNo||''}" data-field="refNo" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-credit"><input type="text" placeholder="Paid Account" value="${r.paid||''}" data-field="paid" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${r.credit||''}" data-field="credit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${r.paidNo||''}" data-field="paidNo" data-rid="${r.id}" list="tpPaidNoList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" style="color:#e8a020;font-weight:600;"></td>
+      <td class="cbcell"><input type="text" placeholder="Weight Station" value="${r.weightStation||''}" data-field="weightStation" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"></td>
+      <td class="cbcell cb-profit"><input type="number" placeholder="0.00" value="${r.profit||''}" data-field="profit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-tp"><input type="text" placeholder="TP Account" value="${r.tpAcc||''}" data-field="tpAcc" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="cbcell cb-tp"><input type="number" placeholder="0.00" value="${r.tpAmount||''}" data-field="tpAmount" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"></td>
+      <td class="no-print" style="text-align:center;">${isReal?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="tpDeleteRow('${r.id}')">🗑️</button>`:''}</td>
+    </tr>`;
+  }).join('') + `<datalist id="tpAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="tpPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
+
+  tpUpdateTotalsOnly(rows.length,q||fr||to);
+}
+
+function tpUpdateTotalsOnly(rowCount,filtered){
+  const tDebit=tpRows.reduce((s,r)=>s+(parseFloat(r.debit)||0),0);
+  const tCredit=tpRows.reduce((s,r)=>s+(parseFloat(r.credit)||0),0);
+  const tProfit=tpRows.reduce((s,r)=>s+(parseFloat(r.profit)||0),0);
+  const tTp=tpRows.reduce((s,r)=>s+(parseFloat(r.tpAmount)||0),0);
+  const el=document.getElementById('tpEntryTotals');
+  if(!el)return;
+  const base='Debit: '+fmt(tDebit)+' | Credit: '+fmt(tCredit)+' | Profit: '+fmt(tProfit)+' | TP: '+fmt(tTp);
+  el.textContent=filtered ? (rowCount+' rows | '+base) : base;
+}
+
+function tpFieldChange(el){
+  const rid=el.getAttribute('data-rid');
+  const field=el.getAttribute('data-field');
+  const value=el.value;
+  const row=el.closest('tr');
+  const wasBlank=row && !row.querySelector('.btn-danger');
+
+  if((field==='party'||field==='paid'||field==='tpAcc') && value.trim()){
+    const exists=accounts.find(a=>a.name.toLowerCase()===value.trim().toLowerCase());
+    if(!exists){
+      toast(`"${value.trim()}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');
+      el.value='';el.focus();return;
+    }
+  }
+
+  if(field==='date'){
+    if(!value){return;}
+    tpUpsertField(rid,'date',value);
+  }else if(['debit','credit','profit','tpAmount'].includes(field)){
+    if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
+    tpUpsertField(rid,field,parseFloat(value)||0);
+  }else{
+    tpUpsertField(rid,field,value);
+  }
+
+  const q=(document.getElementById('tpSearch')?.value||'').trim();
+  const fr=document.getElementById('tpFrom')?.value;
+  const to=document.getElementById('tpTo')?.value;
+  if(q||fr||to){renderTpEntries();refreshDash();return;}
+
+  const stillHasData=tpRows.some(r=>r.id===rid);
+  if((wasBlank && stillHasData) || (!wasBlank && !stillHasData)){
+    renderTpEntries();
+  }else{
+    tpUpdateTotalsOnly();
+  }
+  refreshDash();
+}
+
+function tpFindInput(rid,field){return document.querySelector(`#tpEntryBody input[data-rid="${rid}"][data-field="${field}"]`);}
+function tpGetRowIds(){return [...document.querySelectorAll('#tpEntryBody tr')].map(r=>r.getAttribute('data-rid'));}
+function tpFocusCell(rid,colIdx){
+  if(!rid)return false;
+  const field=TP_FIELD_ORDER[colIdx];
+  if(!field)return false;
+  const inp=tpFindInput(rid,field);
+  if(inp){inp.focus();if(inp.select)inp.select();return true;}
+  return false;
+}
+function tpKeyHandler(ev,el,isLastRow){
+  const rid=el.getAttribute('data-rid');
+  const field=el.getAttribute('data-field');
+  const colIdx=TP_FIELD_ORDER.indexOf(field);
+  const rids=tpGetRowIds();
+  const rowIdx=rids.indexOf(rid);
+  const hasDatalist=!!el.getAttribute('list');
+
+  if(ev.key==='Enter'){
+    ev.preventDefault();
+    el.blur();
+    if(isLastRow){
+      tpDesiredBlankCount++;
+      setTimeout(()=>{
+        renderTpEntries();
+        const allRows=document.querySelectorAll('#tpEntryBody tr');
+        const newRow=allRows[allRows.length-1];
+        if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
+      },10);
+    }else{
+      setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+    }
+    return;
+  }
+  if(el.type==='date'||hasDatalist)return;
+  if(ev.key==='ArrowDown'){
+    ev.preventDefault();el.blur();
+    setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+  }else if(ev.key==='ArrowUp'){
+    if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rids[rowIdx-1],colIdx),10);}
+  }else if(ev.key==='ArrowRight'){
+    let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
+    if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx+1),10);}
+  }else if(ev.key==='ArrowLeft'){
+    let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
+    if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx-1),10);}
+  }
+}
+
+function tpDeleteRow(rid){
+  if(!confirm('Yeh poori row delete karna chahte hain? (Iski 4 ledger entries bhi Recycle Bin mein jayengi)'))return;
+  const linked=entries.filter(e=>e.tpRowId===rid);
+  linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
+  if(linked.length)DB.set('cargo_recycle',recycleBin);
+  tpRemoveGeneratedEntries(rid);
+  tpRows=tpRows.filter(r=>r.id!==rid);
+  saveTp();save();renderTpEntries();refreshDash();
+  toast('TP Row delete ho gayi (entries Recycle Bin mein) ↩️','');
+}
+
+function tpClear(){
+  document.getElementById('tpSearch').value='';
+  document.getElementById('tpFrom').value='';
+  document.getElementById('tpTo').value='';
+  renderTpEntries();
+}
+
+function printTp(){
+  const rows=tpRows.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const rowsHtml=rows.map((r,i)=>`<tr>
+    <td>${i+1}</td><td>${r.date||''}</td><td>${r.party||''}</td><td style="color:#dc2626;">${fmt(r.debit||0)}</td><td>${r.refNo||''}</td>
+    <td>${r.paid||''}</td><td style="color:#15803d;">${fmt(r.credit||0)}</td><td>${r.paidNo||''}</td><td>${r.weightStation||''}</td>
+    <td style="color:#9333ea;">${fmt(r.profit||0)}</td><td>${r.tpAcc||''}</td><td style="color:#1d4ed8;">${fmt(r.tpAmount||0)}</td>
+  </tr>`).join('');
+  const tDebit=rows.reduce((s,r)=>s+(parseFloat(r.debit)||0),0);
+  const tCredit=rows.reduce((s,r)=>s+(parseFloat(r.credit)||0),0);
+  const tProfit=rows.reduce((s,r)=>s+(parseFloat(r.profit)||0),0);
+  const tTp=rows.reduce((s,r)=>s+(parseFloat(r.tpAmount)||0),0);
+  document.getElementById('printArea').innerHTML=`
+    <div class="print-hdr"><h1>${cfg.company}</h1><p>TP Entry Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
+    <table><thead><tr><th>#</th><th>Date</th><th>Party</th><th>Debit</th><th>Ref</th><th>Paid Acc</th><th>Credit</th><th>Paid No</th><th>Weight Station</th><th>Profit</th><th>TP Acc</th><th>TP Amt</th></tr></thead>
+    <tbody>${rowsHtml||'<tr><td colspan="12" style="text-align:center;">No entries</td></tr>'}</tbody>
+    <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tDebit)}</td><td colspan="2"></td><td style="color:#15803d;">${fmt(tCredit)}</td><td colspan="2"></td><td style="color:#9333ea;">${fmt(tProfit)}</td><td></td><td style="color:#1d4ed8;">${fmt(tTp)}</td></tr></tfoot>
+    </table>`;
+  window.print();
+}
+
 // ===== RECYCLE BIN =====
 let recycleBin=DB.get('cargo_recycle',[]);
 function renderRecycleBin(){
@@ -2510,7 +2938,7 @@ function doPrint(){
 
 // BACKUP
 function exportData(){
-  const d={entries,accounts,paidAccounts,paidEntries,cfg,recycleBin,exportedAt:new Date().toISOString()};
+  const d={entries,accounts,paidAccounts,paidEntries,tpRows,cfg,recycleBin,exportedAt:new Date().toISOString()};
   const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='farman-cargo-backup-'+today()+'.json';a.click();
   toast('Backup file download ho rahi hai! 💾','success');
@@ -2522,6 +2950,7 @@ function importData(ev){
     if(confirm(`Backup restore karain?\n\nEntries: ${d.entries?.length||0}\nAccounts: ${d.accounts?.length||0}\nPaid Accounts: ${d.paidAccounts?.length||0}\nPaid Entries: ${d.paidEntries?.length||0}\n\nCurrent data replace ho jayega!`)){
       entries=d.entries||[];accounts=d.accounts||[];
       paidAccounts=d.paidAccounts||[];paidEntries=d.paidEntries||[];
+      tpRows=d.tpRows||[];DB.set('cargo_tp_rows',tpRows);
       if(d.cfg)cfg={...cfg,...d.cfg};
       recycleBin=d.recycleBin||[];DB.set('cargo_recycle',recycleBin);
       save();savePaid();initApp();renderPaidAccounts();toast('Restore ho gaya! ✅','success');}}
@@ -2562,7 +2991,7 @@ function changePassword(){
 function clearAll(){
   if(!confirm('KHABARDAR! Sab entries, accounts, paid accounts aur paid entries delete ho jayengi!'))return;
   if(!confirm('Doosri baar confirm karein — yeh action undo nahi hoga!'))return;
-  entries=[];accounts=[];paidAccounts=[];paidEntries=[];save();savePaid();refreshDash();renderPaidAccounts();toast('Sab data delete ho gaya!','');
+  entries=[];accounts=[];paidAccounts=[];paidEntries=[];tpRows=[];DB.set('cargo_tp_rows',tpRows);save();savePaid();refreshDash();renderPaidAccounts();toast('Sab data delete ho gaya!','');
 }
 
 
