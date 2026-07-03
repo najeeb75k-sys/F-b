@@ -24,6 +24,26 @@
   body{font-family:'Inter',sans-serif;background:var(--bg-light);color:var(--text-dark);min-height:100vh;-webkit-font-smoothing:antialiased;}
   ::selection{background:rgba(193,127,14,.25);}
 
+  /* SPLASH / WELCOME */
+  #splashScreen{position:fixed;inset:0;z-index:9999;pointer-events:none;}
+  .splash-half{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(160deg,#061426 0%,#0f2b4d 45%,#153a68 75%,#0f2b4d 100%);display:flex;align-items:center;transition:transform .85s cubic-bezier(.76,0,.24,1);pointer-events:auto;}
+  .splash-left{left:0;justify-content:flex-end;border-right:1px solid rgba(193,127,14,.25);}
+  .splash-right{right:0;justify-content:flex-start;}
+  #splashScreen.split .splash-left{transform:translateX(-100%);}
+  #splashScreen.split .splash-right{transform:translateX(100%);}
+  .splash-logo-wrap{display:flex;align-items:center;gap:16px;padding:0 8px;opacity:1;transition:opacity .35s ease;}
+  #splashScreen.split .splash-logo-wrap{opacity:0;}
+  .splash-truck{font-size:52px;filter:drop-shadow(0 0 18px rgba(193,127,14,.55));animation:splashFloat 1.6s ease-in-out infinite;}
+  @keyframes splashFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+  .splash-left .splash-truck{margin-left:auto;}
+  .splash-text{font-family:'Poppins',sans-serif;color:#fff;}
+  .splash-text h1{font-size:20px;font-weight:800;letter-spacing:.2px;white-space:nowrap;}
+  .splash-text p{color:var(--accent-light);font-size:10.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;margin-top:5px;}
+  .splash-right .splash-text{border-left:2px solid rgba(193,127,14,.4);padding-left:16px;}
+  .splash-seam{position:absolute;top:0;bottom:0;left:50%;width:2px;background:linear-gradient(180deg,transparent,rgba(193,127,14,.6),transparent);transform:translateX(-1px);transition:opacity .3s ease .3s;}
+  #splashScreen.split .splash-seam{opacity:0;}
+  @media(max-width:640px){.splash-truck{font-size:38px;}.splash-text h1{font-size:15px;}.splash-text p{font-size:9px;letter-spacing:1.8px;}}
+
   /* LOGIN */
   #loginPage{min-height:100vh;background:
       radial-gradient(circle at 15% 15%,rgba(193,127,14,.16) 0%,transparent 42%),
@@ -286,6 +306,36 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icon-192.png">
 </head>
 <body>
+
+<!-- SPLASH / WELCOME (opens then splits apart to reveal the login page) -->
+<div id="splashScreen">
+  <div class="splash-half splash-left">
+    <div class="splash-logo-wrap">
+      <span class="splash-truck">🚛</span>
+    </div>
+  </div>
+  <div class="splash-half splash-right">
+    <div class="splash-logo-wrap">
+      <div class="splash-text">
+        <h1 id="splashCompanyName">Farman &amp; Brothers<br>Cargo Service</h1>
+        <p>Welcome</p>
+      </div>
+    </div>
+  </div>
+  <div class="splash-seam"></div>
+</div>
+<script>
+  // Welcome splash: shows briefly on every fresh load, then the two halves split
+  // apart to reveal the login page underneath.
+  (function(){
+    var splash=document.getElementById('splashScreen');
+    if(!splash)return;
+    setTimeout(function(){
+      splash.classList.add('split');
+      setTimeout(function(){ splash.style.display='none'; },900);
+    },1100);
+  })();
+</script>
 
 <!-- LOGIN -->
 <div id="loginPage">
@@ -1490,6 +1540,7 @@ function updateCoName(){
   const n=cfg.company;
   document.getElementById('topbarCompany').textContent=n;
   document.getElementById('loginCompanyName').innerHTML=n.replace('&','&amp;');
+  const sp=document.getElementById('splashCompanyName');if(sp)sp.innerHTML=n.replace('&','&amp;');
   ['printCoSum','adPrintCo'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=n;});
 }
 
@@ -1698,7 +1749,7 @@ function deleteEntry(id){
     e.deletedAt=new Date().toISOString();
     e.deletedFrom='entry';
     recycleBin.push(e);
-    DB.set('cargo_recycle',recycleBin);
+    DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
   }
   entries=entries.filter(x=>x.id!==id);
   save();
@@ -1723,9 +1774,27 @@ function saveAcc(){
   const phone=document.getElementById('acc_phone').value.trim();
   const address=document.getElementById('acc_address').value.trim();
   const id=document.getElementById('editAccId').value;
-  if(id){const idx=accounts.findIndex(a=>a.id===id);accounts[idx]={id,name,phone,address};}
+  let renameMsg=null;
+  if(id){
+    const idx=accounts.findIndex(a=>a.id===id);
+    const oldName=accounts[idx].name;
+    if(oldName.toLowerCase()!==name.toLowerCase() && accounts.find((a,i)=>i!==idx&&a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account naam pehle se kisi aur account mein hai!','error');return;}
+    accounts[idx]={id,name,phone,address};
+    if(oldName!==name){
+      // Rename cascades everywhere this account name is stored, so every past
+      // debit/credit entry (active or in the Recycle Bin) shows the new name too.
+      let changed=0;
+      entries.forEach(e=>{if(e.name===oldName){e.name=name;changed++;}});
+      recycleBin.forEach(e=>{if(e.name===oldName)e.name=name;});
+      if(currentAccDetailId===oldName)currentAccDetailId=name;
+      DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+      renameMsg=`Account rename ho gaya! ${changed} entries bhi naye naam se update ho gayin ✅`;
+    }
+  }
   else{if(accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account pehle se hai!','error');return;}accounts.push({id:uid(),name,phone,address});}
-  save();renderAccounts();updateAccLists();closeModal('accModal');toast('Account save ho gaya! ✅','success');
+  save();renderAccounts();updateAccLists();closeModal('accModal');
+  if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
+  toast(renameMsg||'Account save ho gaya! ✅','success');
 }
 function autoAddAcc(name){if(!name)return;if(paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase()))return;// paid account names skip
   if(!accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){accounts.push({id:uid(),name,phone:'',address:''});save();updateAccLists();}}
@@ -2066,7 +2135,7 @@ function cbDeleteRow(pairId){
   if(!confirm('Yeh poori row delete karna chahte hain? (Recycle Bin mein jayegi)'))return;
   const toDelete=entries.filter(e=>(e.pairId||e.id)===pairId);
   toDelete.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  if(toDelete.length)DB.set('cargo_recycle',recycleBin);
+  if(toDelete.length){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   entries=entries.filter(e=>(e.pairId||e.id)!==pairId);
   // remove any paid-account ledger entries linked to the deleted cashbook rows
   const deletedIds=toDelete.map(e=>e.id);
@@ -2782,7 +2851,7 @@ function tpDeleteRow(rid){
   if(!confirm('Yeh poori row delete karna chahte hain? (Iski 4 ledger entries bhi Recycle Bin mein jayengi)'))return;
   const linked=entries.filter(e=>e.tpRowId===rid);
   linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  if(linked.length)DB.set('cargo_recycle',recycleBin);
+  if(linked.length){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   tpRemoveGeneratedEntries(rid);
   tpRows=tpRows.filter(r=>r.id!==rid);
   saveTp();save();renderTpEntries();refreshDash();
@@ -3143,7 +3212,7 @@ function obDeleteRow(rid){
   if(!confirm('Yeh poori row delete karna chahte hain? (Iski ledger entries bhi Recycle Bin mein jayengi)'))return;
   const linked=entries.filter(e=>e.obRowId===rid);
   linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  if(linked.length)DB.set('cargo_recycle',recycleBin);
+  if(linked.length){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   obRemoveGeneratedEntries(rid);
   obRows=obRows.filter(r=>r.id!==rid);
   saveOb();save();renderObEntries();refreshDash();
@@ -3886,7 +3955,7 @@ function deletePaidEntry(id){
     const pa=paidAccounts.find(a=>a.id===e.paidAccId);
     const copy={...e,name:(pa?pa.name:'Paid Account'),deletedAt:new Date().toISOString(),deletedFrom:'paidEntry'};
     recycleBin.push(copy);
-    DB.set('cargo_recycle',recycleBin);
+    DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
     if(!e.cashbookRef)removePaidEntryMirror(e.id);
   }
   paidEntries=paidEntries.filter(x=>x.id!==id);
