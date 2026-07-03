@@ -113,6 +113,25 @@
   .btn-gdrive{background:#fff;border:1.5px solid #4285f4;color:#4285f4;font-weight:700;}
   .btn-gdrive:hover{background:#4285f4;color:white;}
 
+  /* Roman Urdu → Urdu translate toggle button, injected next to description fields */
+  .ru-translate-btn{position:absolute;top:2px;right:2px;font-size:10.5px;line-height:1;background:linear-gradient(135deg,var(--accent-deep),var(--accent-light));color:#1a1204;border:none;border-radius:6px;padding:3px 5px;cursor:pointer;z-index:6;opacity:.92;box-shadow:0 1px 4px rgba(193,127,14,.4);transition:transform .15s,opacity .15s;}
+  .ru-translate-btn:hover{opacity:1;transform:scale(1.08);}
+  .ru-translate-host{position:relative !important;display:block;width:100%;}
+  .ru-translate-host input{padding-right:26px !important;}
+
+  /* Floating quick-action button */
+  .fab-wrap{position:fixed;right:22px;bottom:22px;z-index:400;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+  .fab-menu{display:flex;flex-direction:column;gap:9px;margin-bottom:2px;opacity:0;transform:translateY(10px) scale(.9);pointer-events:none;transition:all .22s ease;}
+  .fab-wrap.open .fab-menu{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  .fab-item{display:flex;align-items:center;gap:9px;background:var(--card-bg);color:var(--primary);border:1px solid var(--border);border-radius:30px;padding:9px 16px 9px 9px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow-md);cursor:pointer;white-space:nowrap;transition:all .2s;}
+  .fab-item:hover{background:var(--primary);color:#fff;transform:translateX(-2px);}
+  .fab-item .fab-ic{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent-deep),var(--accent-light));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+  .fab-main{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--primary-dark),var(--primary) 55%,var(--primary-light));color:#fff;border:none;font-size:26px;cursor:pointer;box-shadow:0 10px 28px rgba(8,26,48,.4);display:flex;align-items:center;justify-content:center;transition:transform .25s,box-shadow .25s;}
+  .fab-main:hover{box-shadow:0 14px 34px rgba(8,26,48,.5);}
+  .fab-wrap.open .fab-main{transform:rotate(45deg);background:linear-gradient(135deg,var(--accent-deep),var(--accent) 55%,var(--accent-light));color:#1a1204;}
+  @media print{.fab-wrap{display:none !important;}}
+  @media(max-width:768px){.fab-wrap{right:16px;bottom:16px;}.fab-main{width:52px;height:52px;font-size:23px;}}
+
   .form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:14px;}
   .fg{display:flex;flex-direction:column;gap:5px;}
   .fg label{font-size:11.5px;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:.3px;}
@@ -877,6 +896,17 @@
 
     </div><!-- /main-content -->
   </div><!-- /app-layout -->
+
+  <!-- Floating quick-action button -->
+  <div class="fab-wrap" id="fabWrap">
+    <div class="fab-menu" id="fabMenu">
+      <div class="fab-item" onclick="fabAction('entry')"><span class="fab-ic">➕</span> Naya Entry</div>
+      <div class="fab-item" onclick="fabAction('cashbook')"><span class="fab-ic">📒</span> Cashbook</div>
+      <div class="fab-item" onclick="fabAction('account')"><span class="fab-ic">👤</span> Naya Account</div>
+      <div class="fab-item" onclick="fabAction('top')"><span class="fab-ic">⬆️</span> Upar Jayen</div>
+    </div>
+    <button class="fab-main" id="fabMain" onclick="toggleFab()" title="Quick Actions">＋</button>
+  </div>
 </div><!-- /mainApp -->
 
 <!-- MODALS -->
@@ -1320,6 +1350,16 @@ function T(key){
   const lang=(typeof cfg!=='undefined'&&cfg.lang)||'urdu';
   const t=I18N[lang]||I18N['urdu'];
   return t[key]||I18N['en'][key]||key;
+}
+// Print helper — transliterates Roman Urdu description/free-text fields into Urdu script
+// whenever the app language (Settings → Language) is set to Urdu. Falls back to the raw
+// text if no translator is loaded yet or the app language isn't Urdu.
+function PU(text){
+  text=text||'';
+  if(!text)return '';
+  const lang=(typeof cfg!=='undefined'&&cfg.lang)||'urdu';
+  if(lang!=='urdu')return text;
+  try{ return (typeof romanToUrdu==='function') ? romanToUrdu(text) : text; }catch(e){ return text; }
 }
 function applyLanguage(){
   const lang=cfg.lang||'urdu';
@@ -1880,7 +1920,7 @@ function printAccDetail(){
     <td>${i+1}</td><td>${e.date}</td>
     <td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td>
     <td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td>
-    <td>${e.desc||''}</td><td>${e.ref||''}</td>
+    <td>${PU(e.desc)}</td><td>${e.ref||''}</td>
     <td style="font-weight:700;">${fmt(Math.abs(running))} ${running>=0?'CR':'DR'}</td>
   </tr>`;}).join('');
   document.getElementById('printArea').innerHTML=`
@@ -2283,11 +2323,30 @@ function cbKeyHandler(ev,el,isLastRow){
     return;
   }
 
-  // Arrow keys are only used for grid navigation on plain fields (amount/desc/ref) —
-  // never on the date input (its own picker uses arrows to move between day/month/year)
-  // and never on fields with an autocomplete datalist (account name, paid no) since
-  // intercepting arrows there breaks typing/selecting from the suggestion list.
-  if(el.type==='date' || hasDatalist) return;
+  // Date field: Up/Down move between rows (rarely used to step day/month/year),
+  // Left/Right stay native so the day/month/year segments can still be edited.
+  if(el.type==='date'){
+    if(ev.key==='ArrowDown'){
+      ev.preventDefault();el.blur();
+      setTimeout(()=>{const newPids=cbGetRowPids();cbFocusCell(newPids[rowIdx+1],colIdx);},10);
+    }else if(ev.key==='ArrowUp'){
+      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pids[rowIdx-1],colIdx),10);}
+    }
+    return;
+  }
+
+  // Fields with an autocomplete datalist (account name, paid no): Up/Down stay native
+  // so the suggestion list can still be navigated, Left/Right move between grid columns.
+  if(hasDatalist){
+    if(ev.key==='ArrowRight'){
+      let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
+      if(atEdge && colIdx<CB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pid,colIdx+1),10);}
+    }else if(ev.key==='ArrowLeft'){
+      let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pid,colIdx-1),10);}
+    }
+    return;
+  }
 
   if(ev.key==='ArrowDown'){
     ev.preventDefault();
@@ -2685,7 +2744,25 @@ function tpKeyHandler(ev,el,isLastRow){
     }
     return;
   }
-  if(el.type==='date'||hasDatalist)return;
+  if(el.type==='date'){
+    if(ev.key==='ArrowDown'){
+      ev.preventDefault();el.blur();
+      setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+    }else if(ev.key==='ArrowUp'){
+      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rids[rowIdx-1],colIdx),10);}
+    }
+    return;
+  }
+  if(hasDatalist){
+    if(ev.key==='ArrowRight'){
+      let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
+      if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx+1),10);}
+    }else if(ev.key==='ArrowLeft'){
+      let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx-1),10);}
+    }
+    return;
+  }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
     setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
@@ -2722,7 +2799,7 @@ function printTp(){
   const rows=tpRows.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   const rowsHtml=rows.map((r,i)=>`<tr>
     <td>${i+1}</td><td>${r.date||''}</td><td>${r.party||''}</td><td style="color:#dc2626;">${fmt(r.debit||0)}</td><td>${r.refNo||''}</td>
-    <td>${r.paid||''}</td><td style="color:#15803d;">${fmt(r.credit||0)}</td><td>${r.paidNo||''}</td><td>${r.weightStation||''}</td>
+    <td>${r.paid||''}</td><td style="color:#15803d;">${fmt(r.credit||0)}</td><td>${r.paidNo||''}</td><td>${PU(r.weightStation)}</td>
     <td style="color:#9333ea;">${fmt(r.profit||0)}</td><td>${r.tpAcc||''}</td><td style="color:#1d4ed8;">${fmt(r.tpAmount||0)}</td>
   </tr>`).join('');
   const tDebit=rows.reduce((s,r)=>s+(parseFloat(r.debit)||0),0);
@@ -3014,7 +3091,25 @@ function obKeyHandler(ev,el,isLastRow){
     }
     return;
   }
-  if(el.type==='date'||hasDatalist)return;
+  if(el.type==='date'){
+    if(ev.key==='ArrowDown'){
+      ev.preventDefault();el.blur();
+      setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+    }else if(ev.key==='ArrowUp'){
+      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rids[rowIdx-1],colIdx),10);}
+    }
+    return;
+  }
+  if(hasDatalist){
+    if(ev.key==='ArrowRight'){
+      let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
+      if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx+1),10);}
+    }else if(ev.key==='ArrowLeft'){
+      let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx-1),10);}
+    }
+    return;
+  }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
     setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
@@ -3044,7 +3139,7 @@ function printOb(){
   const rows=obRows.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   const rowsHtml=rows.map((r,i)=>`<tr>
     <td>${i+1}</td><td>${r.date||''}</td><td>${r.debitAcc||''}</td><td style="color:#dc2626;">${fmt(r.debitAmt||0)}</td>
-    <td>${r.creditAcc||''}</td><td style="color:#15803d;">${fmt(r.creditAmt||0)}</td><td>${r.desc||''}</td><td>${r.paidNo||''}</td>
+    <td>${r.creditAcc||''}</td><td style="color:#15803d;">${fmt(r.creditAmt||0)}</td><td>${PU(r.desc)}</td><td>${r.paidNo||''}</td>
   </tr>`).join('');
   const tDebit=rows.reduce((s,r)=>s+(parseFloat(r.debitAmt)||0),0);
   const tCredit=rows.reduce((s,r)=>s+(parseFloat(r.creditAmt)||0),0);
@@ -3111,7 +3206,7 @@ function printCashbook(){
   const sorted=[...entries].sort((a,b)=>new Date(a.date)-new Date(b.date));
   const tcr=sorted.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const tdr=sorted.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
-  const rows=sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td><td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td><td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td><td>${e.desc||''}</td><td>${e.ref||''}</td></tr>`).join('');
+  const rows=sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td><td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td><td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td><td>${PU(e.desc)}</td><td>${e.ref||''}</td></tr>`).join('');
   document.getElementById('printArea').innerHTML=`
     <div class="print-hdr"><h1>${cfg.company}</h1><p>${T("navCashbook")} | ${new Date().toLocaleDateString("en-PK")}</p></div>
     <table><thead><tr><th>#</th><th>${T("date")}</th><th>${T("account")}</th><th>${T("debit")}</th><th>${T("credit")}</th><th>${T("description")}</th><th>${T("refNo")}</th></tr></thead>
@@ -3412,7 +3507,7 @@ function previewPrint(){
       <tbody>${sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td>
         <td style="color:#dc2626;">${e.type==='DR'?fmt(e.amount):''}</td>
         <td style="color:#15803d;">${e.type==='CR'?fmt(e.amount):''}</td>
-        <td>${e.desc||'-'}</td><td>${e.ref||'-'}</td></tr>`).join('')}
+        <td>${PU(e.desc)||'-'}</td><td>${e.ref||'-'}</td></tr>`).join('')}
         <tr style="font-weight:700;background:#f8fafc;"><td colspan="3">TOTAL</td>
         <td style="color:#dc2626;">${fmt(tdr)}</td><td style="color:#15803d;">${fmt(tcr)}</td>
         <td colspan="2">Balance: ${fmt(Math.abs(tcr-tdr))}</td></tr>
@@ -3436,7 +3531,7 @@ function doPrint(){
   let running=0;
   const rowsHtml=sorted.map((e,i)=>{
     running += (e.type==='CR'?e.amount:-e.amount);
-    return `<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td><td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td><td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td><td>${e.desc||''}</td><td>${e.ref||''}</td><td style="font-weight:700;">${fmt(Math.abs(running))} ${running>=0?'CR':'DR'}</td></tr>`;
+    return `<tr><td>${i+1}</td><td>${e.date}</td><td>${e.name}</td><td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td><td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td><td>${PU(e.desc)}</td><td>${e.ref||''}</td><td style="font-weight:700;">${fmt(Math.abs(running))} ${running>=0?'CR':'DR'}</td></tr>`;
   }).join('');
   previewPrint();
   document.getElementById('printArea').innerHTML=`
@@ -3722,7 +3817,7 @@ function printPaidDetail(){
     <td>${i+1}</td><td>${e.date}</td>
     <td style="color:#dc2626;font-weight:700;">${e.type==='DR'?fmt(e.amount):''}</td>
     <td style="color:#15803d;font-weight:700;">${e.type==='CR'?fmt(e.amount):''}</td>
-    <td>${e.desc||''}</td><td>${e.ref||''}</td>
+    <td>${PU(e.desc)}</td><td>${e.ref||''}</td>
     <td style="font-weight:700;">${fmt(Math.abs(running))} ${running>=0?'CR':'DR'}</td>
   </tr>`;}).join('');
   document.getElementById('printArea').innerHTML=`
@@ -3742,6 +3837,34 @@ if(!FIREBASE_ENABLED){
   if(gbtn)gbtn.title='Developer ko Firebase config setup karne ke liye bataein';
 }
 
+</script>
+
+<script>
+// ── Floating Quick-Action Button ─────────────────────────────
+function toggleFab(){
+  document.getElementById('fabWrap').classList.toggle('open');
+}
+function closeFab(){
+  document.getElementById('fabWrap').classList.remove('open');
+}
+function fabAction(action){
+  closeFab();
+  if(action==='entry'){
+    openAddEntry();
+  }else if(action==='cashbook'){
+    showPage('autoEntry', document.querySelector('.nav-item[data-page="autoEntry"]'));
+  }else if(action==='account'){
+    openAddAcc();
+  }else if(action==='top'){
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+}
+// Close the menu on outside click / Escape so it never stays stuck open
+document.addEventListener('click',(e)=>{
+  const wrap=document.getElementById('fabWrap');
+  if(wrap && wrap.classList.contains('open') && !wrap.contains(e.target)) closeFab();
+});
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeFab(); });
 </script>
 
 <script>
@@ -3881,6 +4004,122 @@ const spellObserver = new MutationObserver(() => attachSpellCheck());
 document.addEventListener('DOMContentLoaded', () => {
   spellObserver.observe(document.body, { childList: true, subtree: true });
   attachSpellCheck();
+});
+</script>
+
+<script>
+// ── Roman Urdu → Urdu (script) Translator ────────────────────────────────
+// Dictionary-based translation for common cargo/business/everyday Roman Urdu
+// words, with a best-effort phonetic fallback for anything not in the list.
+// This is a beta feature — good for common words/phrases, approximate for
+// unusual names/spellings.
+const RU_WORDS = {
+  // numbers
+  ek:'ایک',do:'دو',teen:'تین',char:'چار',paanch:'پانچ',chhe:'چھے',saat:'سات',aath:'آٹھ',nau:'نو',das:'دس',
+  bees:'بیس',tees:'تیس',chalis:'چالیس',pachaas:'پچاس',saath:'ساٹھ',assi:'اسی',nabbe:'نوے',sau:'سو',hazar:'ہزار',lakh:'لاکھ',crore:'کروڑ',
+  // cargo / business
+  maal:'مال',saman:'سامان',raseed:'رسید',hisab:'حساب',udhaar:'ادھار',nakad:'نقد',cash:'نقد',
+  payment:'ادائیگی',advance:'ایڈوانس',baqi:'باقی',total:'ٹوٹل',kul:'کل',jama:'جمع',kharch:'خرچ',kharcha:'خرچہ',
+  amdani:'آمدنی',munafa:'منافع',nuqsan:'نقصان',truck:'ٹرک',gaari:'گاڑی',driver:'ڈرائیور',savari:'سواری',
+  kiraya:'کرایہ',bhara:'بھرا',freight:'بھاڑا',load:'لوڈ',unload:'ان لوڈ',loading:'لوڈنگ',unloading:'ان لوڈنگ',
+  delivery:'ڈیلیوری',pickup:'پک اپ',party:'پارٹی',agent:'ایجنٹ',bill:'بل',receipt:'رسید',challan:'چالان',
+  invoice:'انوائس',voucher:'واؤچر',received:'وصول',paid:'ادا',pending:'باقی',complete:'مکمل',partial:'جزوی',full:'پورا',half:'آدھا',
+  // places
+  rawalpindi:'راولپنڈی',lahore:'لاہور',karachi:'کراچی',islamabad:'اسلام آباد',peshawar:'پشاور',multan:'ملتان',
+  faisalabad:'فیصل آباد',quetta:'کوئٹہ',pindi:'پنڈی',
+  // time
+  aaj:'آج',kal:'کل',parson:'پرسوں',tarikh:'تاریخ',mahina:'مہینہ',hafta:'ہفتہ',saal:'سال',
+  pehle:'پہلے',baad:'بعد',abhi:'ابھی',phir:'پھر',dobara:'دوبارہ',baar:'بار',
+  // common words / pronouns
+  ka:'کا',ki:'کی',ke:'کے',se:'سے',ko:'کو',ne:'نے',par:'پر',mein:'میں',hai:'ہے',hain:'ہیں',
+  tha:'تھا',thi:'تھی',the:'تھے',yeh:'یہ',woh:'وہ',aur:'اور',ya:'یا',nahi:'نہیں',haan:'ہاں',
+  theek:'ٹھیک',sahi:'صحیح',ghalat:'غلط',liya:'لیا',diya:'دیا',mila:'ملا',gaya:'گیا',aya:'آیا',
+  kiya:'کیا',karna:'کرنا',karo:'کرو',apna:'اپنا',apni:'اپنی',apne:'اپنے',mera:'میرا',meri:'میری',
+  mere:'میرے',tera:'تیرا',teri:'تیری',tere:'تیرے',hamara:'ہمارا',hamari:'ہماری',sahib:'صاحب',bhai:'بھائی',jee:'جی',
+  // bank / accounts
+  bank:'بینک',cheque:'چیک',online:'آن لائن',transfer:'ٹرانسفر',deposit:'جمع',withdrawal:'نکلوانا',
+  account:'اکاؤنٹ',accounts:'اکاؤنٹس',balance:'بیلنس',debit:'ڈیبٹ',credit:'کریڈٹ',amount:'رقم',
+  date:'تاریخ',description:'تفصیل',from:'سے',to:'کو',mr:'مسٹر',mrs:'مسز',
+};
+const RU_DIGRAPHS=[['chh','چھ'],['sh','ش'],['ch','چ'],['kh','خ'],['gh','غ'],['ph','پھ'],['bh','بھ'],['th','تھ'],['dh','دھ'],['rh','ڑھ'],['jh','جھ']];
+const RU_VOWEL_CLUSTERS=[['aa','ا'],['ee','ی'],['ii','ی'],['oo','و'],['ai','ے'],['au','او']];
+const RU_CONS={b:'ب',p:'پ',t:'ت',d:'د',r:'ر',z:'ز',s:'س',f:'ف',q:'ق',k:'ک',g:'گ',l:'ل',m:'م',n:'ن',w:'و',v:'و',h:'ہ',y:'ی',j:'ج',x:'کس',c:'ک'};
+function ruTransliterateWord(word){
+  let w=word.toLowerCase(), out='', i=0;
+  if(w.startsWith('aa')){ out+='آ'; i=2; }
+  while(i<w.length){
+    let matched=false;
+    for(const [pat,rep] of RU_DIGRAPHS){ if(w.substr(i,pat.length)===pat){ out+=rep; i+=pat.length; matched=true; break; } }
+    if(matched) continue;
+    for(const [pat,rep] of RU_VOWEL_CLUSTERS){ if(w.substr(i,pat.length)===pat){ out+=rep; i+=pat.length; matched=true; break; } }
+    if(matched) continue;
+    const ch=w[i];
+    if('aeiou'.includes(ch)){
+      const isLast=(i===w.length-1);
+      if(ch==='e'&&isLast) out+='ے';
+      else if(ch==='i'&&isLast) out+='ی';
+      else if((ch==='o'||ch==='u')&&isLast) out+='و';
+      i++; continue;
+    }
+    if(RU_CONS[ch]){ out+=RU_CONS[ch]; i++; continue; }
+    out+=w[i]; i++;
+  }
+  return out||word;
+}
+function romanToUrdu(text){
+  if(!text) return '';
+  return text.split(/(\s+)/).map(tok=>{
+    if(/^\s+$/.test(tok)) return tok;
+    const clean=tok.replace(/[^\w'-]/g,'');
+    if(!clean) return tok;
+    const lower=clean.toLowerCase();
+    if(RU_WORDS[lower]) return tok.replace(clean, RU_WORDS[lower]);
+    if(/^\d+$/.test(clean)) return tok;
+    if(/[\u0600-\u06FF]/.test(clean)) return tok;
+    return tok.replace(clean, ruTransliterateWord(clean));
+  }).join('');
+}
+
+// ── Translate toggle button, injected next to description-type fields ────
+function ruToggleTranslate(btn, inp){
+  if(inp.dataset.ruTranslated==='1'){
+    inp.value=inp.dataset.ruOriginal||'';
+    inp.dataset.ruTranslated='0';
+    inp.dir=''; inp.style.fontFamily=''; inp.style.textAlign='';
+    btn.textContent='🔤'; btn.title='Urdu mein tarjuma karein';
+  }else{
+    const original=inp.value;
+    if(!original.trim()) return;
+    inp.dataset.ruOriginal=original;
+    inp.value=romanToUrdu(original);
+    inp.dataset.ruTranslated='1';
+    inp.dir='rtl'; inp.style.fontFamily="'Noto Nastaliq Urdu','Inter',sans-serif"; inp.style.textAlign='right';
+    btn.textContent='↩️'; btn.title='Roman Urdu par wapas jayen';
+  }
+  inp.dispatchEvent(new Event('blur'));
+  inp.focus();
+}
+function attachTranslateButtons(){
+  document.querySelectorAll('input[data-field="desc"], #entry_desc, input[data-field="weightStation"]').forEach(inp=>{
+    if(inp.dataset.translateAttached) return;
+    inp.dataset.translateAttached='1';
+    const wrapper=document.createElement('span');
+    wrapper.className='ru-translate-host';
+    inp.parentNode.insertBefore(wrapper, inp);
+    wrapper.appendChild(inp);
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='ru-translate-btn';
+    btn.textContent='🔤';
+    btn.title='Urdu mein tarjuma karein';
+    btn.onclick=(ev)=>{ ev.preventDefault(); ev.stopPropagation(); ruToggleTranslate(btn, inp); };
+    wrapper.appendChild(btn);
+  });
+}
+const translateObserver=new MutationObserver(()=>attachTranslateButtons());
+document.addEventListener('DOMContentLoaded', ()=>{
+  translateObserver.observe(document.body, { childList:true, subtree:true });
+  attachTranslateButtons();
 });
 </script>
 
