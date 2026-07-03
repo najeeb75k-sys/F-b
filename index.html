@@ -24,26 +24,6 @@
   body{font-family:'Inter',sans-serif;background:var(--bg-light);color:var(--text-dark);min-height:100vh;-webkit-font-smoothing:antialiased;}
   ::selection{background:rgba(193,127,14,.25);}
 
-  /* SPLASH / WELCOME */
-  #splashScreen{position:fixed;inset:0;z-index:9999;pointer-events:none;}
-  .splash-half{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(160deg,#061426 0%,#0f2b4d 45%,#153a68 75%,#0f2b4d 100%);display:flex;align-items:center;transition:transform .85s cubic-bezier(.76,0,.24,1);pointer-events:auto;}
-  .splash-left{left:0;justify-content:flex-end;border-right:1px solid rgba(193,127,14,.25);}
-  .splash-right{right:0;justify-content:flex-start;}
-  #splashScreen.split .splash-left{transform:translateX(-100%);}
-  #splashScreen.split .splash-right{transform:translateX(100%);}
-  .splash-logo-wrap{display:flex;align-items:center;gap:16px;padding:0 8px;opacity:1;transition:opacity .35s ease;}
-  #splashScreen.split .splash-logo-wrap{opacity:0;}
-  .splash-truck{font-size:52px;filter:drop-shadow(0 0 18px rgba(193,127,14,.55));animation:splashFloat 1.6s ease-in-out infinite;}
-  @keyframes splashFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
-  .splash-left .splash-truck{margin-left:auto;}
-  .splash-text{font-family:'Poppins',sans-serif;color:#fff;}
-  .splash-text h1{font-size:20px;font-weight:800;letter-spacing:.2px;white-space:nowrap;}
-  .splash-text p{color:var(--accent-light);font-size:10.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;margin-top:5px;}
-  .splash-right .splash-text{border-left:2px solid rgba(193,127,14,.4);padding-left:16px;}
-  .splash-seam{position:absolute;top:0;bottom:0;left:50%;width:2px;background:linear-gradient(180deg,transparent,rgba(193,127,14,.6),transparent);transform:translateX(-1px);transition:opacity .3s ease .3s;}
-  #splashScreen.split .splash-seam{opacity:0;}
-  @media(max-width:640px){.splash-truck{font-size:38px;}.splash-text h1{font-size:15px;}.splash-text p{font-size:9px;letter-spacing:1.8px;}}
-
   /* LOGIN */
   #loginPage{min-height:100vh;background:
       radial-gradient(circle at 15% 15%,rgba(193,127,14,.16) 0%,transparent 42%),
@@ -73,6 +53,26 @@
   .btn-google{width:100%;background:#fff;border:none;border-radius:11px;padding:12px;color:#3c4043;font-size:13.5px;font-weight:700;cursor:pointer;transition:all .25s;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.18);}
   .btn-google:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.22);}
   .btn-google:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+
+  /* WELCOME / SPLASH */
+  #welcomePage{position:fixed;inset:0;z-index:9999;display:flex;pointer-events:auto;}
+  #welcomePage .wp-half{flex:1;height:100%;background:linear-gradient(160deg,#061426 0%,#0f2b4d 45%,#153a68 75%,#0f2b4d 100%);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;transition:transform .75s cubic-bezier(.65,0,.35,1),opacity .75s ease;}
+  #welcomePage .wp-left{justify-content:flex-end;padding-right:2px;}
+  #welcomePage .wp-right{justify-content:flex-start;padding-left:2px;}
+  #welcomePage .wp-left::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 90% 50%,rgba(193,127,14,.16) 0%,transparent 55%);}
+  #welcomePage .wp-right::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 10% 50%,rgba(31,77,133,.35) 0%,transparent 55%);}
+  #welcomePage.wp-split .wp-left{transform:translateX(-100%);}
+  #welcomePage.wp-split .wp-right{transform:translateX(100%);}
+  #welcomePage.wp-gone{display:none;}
+  .wp-content{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:2;transition:opacity .35s ease,transform .35s ease;}
+  #welcomePage.wp-split .wp-content{opacity:0;transform:scale(.9);}
+  .wp-truck{font-size:64px;display:block;margin-bottom:16px;filter:drop-shadow(0 0 22px rgba(193,127,14,.6));animation:wpBounce 1.6s ease-in-out infinite;}
+  @keyframes wpBounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+  .wp-content h1{font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;color:#fff;letter-spacing:.3px;line-height:1.35;}
+  .wp-content p{color:var(--accent-light);font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;margin-top:8px;}
+  .wp-loadbar{width:160px;height:3px;border-radius:3px;background:rgba(255,255,255,.14);margin-top:26px;overflow:hidden;}
+  .wp-loadbar span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent-deep),var(--accent-light));border-radius:3px;animation:wpLoad 1.4s ease forwards;}
+  @keyframes wpLoad{to{width:100%;}}
 
   /* APP */
   #mainApp{display:none;min-height:100vh;}
@@ -307,33 +307,31 @@
 </head>
 <body>
 
-<!-- SPLASH / WELCOME (opens then splits apart to reveal the login page) -->
-<div id="splashScreen">
-  <div class="splash-half splash-left">
-    <div class="splash-logo-wrap">
-      <span class="splash-truck">🚛</span>
-    </div>
+<!-- WELCOME / SPLASH -->
+<div id="welcomePage">
+  <div class="wp-half wp-left"></div>
+  <div class="wp-half wp-right"></div>
+  <div class="wp-content">
+    <span class="wp-truck">🚛</span>
+    <h1>Farman &amp; Brothers<br>Cargo Service</h1>
+    <p>Welcome</p>
+    <div class="wp-loadbar"><span></span></div>
   </div>
-  <div class="splash-half splash-right">
-    <div class="splash-logo-wrap">
-      <div class="splash-text">
-        <h1 id="splashCompanyName">Farman &amp; Brothers<br>Cargo Service</h1>
-        <p>Welcome</p>
-      </div>
-    </div>
-  </div>
-  <div class="splash-seam"></div>
 </div>
 <script>
-  // Welcome splash: shows briefly on every fresh load, then the two halves split
-  // apart to reveal the login page underneath.
+  // Splash splits open into two halves and reveals the login page underneath, either after a
+  // short timer or as soon as the user taps — whichever comes first.
   (function(){
-    var splash=document.getElementById('splashScreen');
-    if(!splash)return;
-    setTimeout(function(){
-      splash.classList.add('split');
-      setTimeout(function(){ splash.style.display='none'; },900);
-    },1100);
+    let done=false;
+    function openSplash(){
+      if(done)return; done=true;
+      const wp=document.getElementById('welcomePage');
+      if(!wp)return;
+      wp.classList.add('wp-split');
+      setTimeout(()=>{wp.classList.add('wp-gone');},780);
+    }
+    document.getElementById('welcomePage').addEventListener('click',openSplash);
+    setTimeout(openSplash,1600);
   })();
 </script>
 
@@ -1540,7 +1538,6 @@ function updateCoName(){
   const n=cfg.company;
   document.getElementById('topbarCompany').textContent=n;
   document.getElementById('loginCompanyName').innerHTML=n.replace('&','&amp;');
-  const sp=document.getElementById('splashCompanyName');if(sp)sp.innerHTML=n.replace('&','&amp;');
   ['printCoSum','adPrintCo'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=n;});
 }
 
@@ -1774,33 +1771,65 @@ function saveAcc(){
   const phone=document.getElementById('acc_phone').value.trim();
   const address=document.getElementById('acc_address').value.trim();
   const id=document.getElementById('editAccId').value;
-  let renameMsg=null;
   if(id){
     const idx=accounts.findIndex(a=>a.id===id);
-    const oldName=accounts[idx].name;
-    if(oldName.toLowerCase()!==name.toLowerCase() && accounts.find((a,i)=>i!==idx&&a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account naam pehle se kisi aur account mein hai!','error');return;}
+    const oldName=accounts[idx]?accounts[idx].name:'';
+    // block renaming onto a name that already belongs to a DIFFERENT account
+    const clash=accounts.find(a=>a.id!==id && a.name.toLowerCase()===name.toLowerCase());
+    if(clash){toast('Yeh account naam pehle se kisi aur account ka hai!','error');return;}
     accounts[idx]={id,name,phone,address};
-    if(oldName!==name){
-      // Rename cascades everywhere this account name is stored, so every past
-      // debit/credit entry (active or in the Recycle Bin) shows the new name too.
-      let changed=0;
-      entries.forEach(e=>{if(e.name===oldName){e.name=name;changed++;}});
-      recycleBin.forEach(e=>{if(e.name===oldName)e.name=name;});
-      if(currentAccDetailId===oldName)currentAccDetailId=name;
-      DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
-      renameMsg=`Account rename ho gaya! ${changed} entries bhi naye naam se update ho gayin ✅`;
+    if(oldName && oldName.trim().toLowerCase()!==name.trim().toLowerCase()){
+      renameAccountEverywhere(oldName,name);
     }
   }
   else{if(accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account pehle se hai!','error');return;}accounts.push({id:uid(),name,phone,address});}
-  save();renderAccounts();updateAccLists();closeModal('accModal');
-  if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
-  toast(renameMsg||'Account save ho gaya! ✅','success');
+  save();renderAccounts();updateAccLists();closeModal('accModal');toast('Account save ho gaya! ✅','success');
+}
+// Renaming an account updates its name everywhere it's referenced, so all past debit/credit
+// entries recorded under the old name now show up under the new name instead of "disappearing"
+// from that account's ledger. Covers: cashbook entries, TP-row-generated entries (+ the TP row's
+// own source fields so a future edit doesn't regenerate the old name), OB-row-generated entries
+// (+ their source fields), the configured profit account, and the recycle bin (so restored items
+// keep the new name too).
+function renameAccountEverywhere(oldName,newName){
+  const on=oldName.trim().toLowerCase();
+  const matches=n=>n&&String(n).trim().toLowerCase()===on;
+  let touched=false;
+  entries.forEach(e=>{if(matches(e.name)){e.name=newName;touched=true;}});
+  recycleBin.forEach(e=>{if(e.name!==undefined&&matches(e.name)){e.name=newName;}});
+  let tpTouched=false;
+  tpRows.forEach(r=>{
+    if(matches(r.party)){r.party=newName;tpTouched=true;}
+    if(matches(r.paid)){r.paid=newName;tpTouched=true;}
+    if(matches(r.tpAcc)){r.tpAcc=newName;tpTouched=true;}
+  });
+  let obTouched=false;
+  obRows.forEach(r=>{
+    if(matches(r.debitAcc)){r.debitAcc=newName;obTouched=true;}
+    if(matches(r.creditAcc)){r.creditAcc=newName;obTouched=true;}
+  });
+  if(matches(cfg.profitAccount)){cfg.profitAccount=newName;}
+  if(touched||tpTouched||obTouched){
+    DB.set('cargo_recycle',recycleBin);
+    if(tpTouched)DB.set('cargo_tp_rows',tpRows);
+    if(obTouched)DB.set('cargo_ob_rows',obRows);
+    DB.set('cargo_cfg',cfg);
+    pushToCloud({entries,recycleBin,tpRows,obRows,cfg});
+  }
 }
 function autoAddAcc(name){if(!name)return;if(paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase()))return;// paid account names skip
   if(!accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){accounts.push({id:uid(),name,phone:'',address:''});save();updateAccLists();}}
 function deleteAcc(id){
-  if(!confirm('Yeh account delete karna chahte hain?'))return;
-  accounts=accounts.filter(a=>a.id!==id);save();renderAccounts();updateAccLists();toast('Account delete ho gaya!','');
+  if(!confirm('Yeh account delete karna chahte hain? (Recycle Bin mein jayega)'))return;
+  const a=accounts.find(x=>x.id===id);
+  if(a){
+    const copy={...a,deletedAt:new Date().toISOString(),deletedFrom:'account'};
+    recycleBin.push(copy);
+    DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+  }
+  accounts=accounts.filter(x=>x.id!==id);save();renderAccounts();updateAccLists();
+  if(document.getElementById('page-backup').classList.contains('active'))renderRecycleBin();
+  toast('Account Recycle Bin mein gaya! ↩️ Wapas la sakte hain.','');
 }
 function renderAccounts(data){
   const list=data||accounts;
@@ -3252,7 +3281,19 @@ function renderRecycleBin(){
     return;
   }
   const sorted=[...recycleBin].sort((a,b)=>new Date(b.deletedAt)-new Date(a.deletedAt));
-  list.innerHTML=sorted.map(e=>`
+  list.innerHTML=sorted.map(e=>{
+    if(e.deletedFrom==='account'){
+      return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">👤 ${e.name} <span style="font-size:10px;color:#94a3b8;font-weight:500;">(Account)</span></div>
+        <div style="font-size:11px;color:var(--text-light);">${e.phone||'-'} | ${e.address||'-'}</div>
+        <div style="font-size:10px;color:#ef4444;">Deleted: ${new Date(e.deletedAt).toLocaleDateString('en-PK')}</div>
+      </div>
+      <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
+    </div>`;
+    }
+    return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
       <div>
         <div style="font-weight:600;font-size:13px;">${e.name} — <span class="badge badge-${e.type.toLowerCase()}">${e.type}: ${fmt(e.amount)}</span></div>
@@ -3260,7 +3301,8 @@ function renderRecycleBin(){
         <div style="font-size:10px;color:#ef4444;">Deleted: ${new Date(e.deletedAt).toLocaleDateString('en-PK')}</div>
       </div>
       <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 function restoreEntry(id){
   const idx=recycleBin.findIndex(x=>x.id===id);
@@ -3268,6 +3310,20 @@ function restoreEntry(id){
   const e=recycleBin[idx];
   const deletedFrom=e.deletedFrom;
   delete e.deletedAt;delete e.deletedFrom;
+
+  // Deleted account restores straight back into the accounts list (not into entries).
+  if(deletedFrom==='account'){
+    if(accounts.find(a=>a.name.toLowerCase()===e.name.toLowerCase())){
+      toast('"'+e.name+'" naam se account pehle se maujood hai — restore nahi ho saka','error');
+      return;
+    }
+    accounts.push(e);
+    recycleBin.splice(idx,1);
+    save();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+    renderAccounts();updateAccLists();refreshDash();renderRecycleBin();
+    toast('Account restore ho gaya! ✅','success');
+    return;
+  }
 
   // Paid Account ledger entries (deleted from a Paid Account's own detail page) restore straight
   // back into paidEntries, not into the main entries/cashbook list.
