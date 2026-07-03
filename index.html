@@ -1539,16 +1539,13 @@ function startAllAccountsScroll(){
   },80);
 }
 function refreshDash(){
-  // Per-account net balance → sum CR-positive accounts and DR-negative accounts.
-  // This is the "account balance" total: each account's own balance (CR or DR) added
-  // together separately, then a single net balance (the difference) shown too.
-  const accBal={};
-  entries.forEach(e=>{
-    if(!accBal[e.name])accBal[e.name]=0;
-    accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
-  });
+  // Total Credit / Total Debit — raw sum of every CR entry and every DR entry across ALL
+  // accounts (no per-account netting). This ensures every entry's amount is counted on its
+  // own side, even if an account has entries on both sides.
   let balCR=0,balDR=0;
-  Object.values(accBal).forEach(b=>{if(b>0)balCR+=b;else balDR+=Math.abs(b);});
+  entries.forEach(e=>{
+    if(e.type==='CR')balCR+=e.amount;else balDR+=e.amount;
+  });
   const bal=balCR-balDR;
   // Total Accounts count (unique account names from accounts list + any entry-only names)
   const allAccNames=new Set([...accounts.map(a=>a.name),...entries.map(e=>e.name)]);
@@ -3323,14 +3320,13 @@ function summaryFilteredEntries(){
 
 function renderSummary(){
   const data=summaryFilteredEntries();
-  // Per-account net balance — sum CR-positive and DR-negative accounts (not raw entry totals)
-  const accBal={};
-  data.forEach(e=>{
-    if(!accBal[e.name])accBal[e.name]=0;
-    accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
-  });
+  // Total Credit / Total Debit — raw sum of every CR entry and every DR entry (no per-account
+  // netting), so every entry's amount counts on its own side even if an account has entries
+  // on both sides.
   let tcr=0,tdr=0;
-  Object.values(accBal).forEach(b=>{if(b>0)tcr+=b;else tdr+=Math.abs(b);});
+  data.forEach(e=>{
+    if(e.type==='CR')tcr+=e.amount;else tdr+=e.amount;
+  });
   document.getElementById('sum_cr').textContent=fmt(tcr);
   document.getElementById('sum_dr').textContent=fmt(tdr);
   document.getElementById('sum_bal').textContent=fmt(Math.abs(tcr-tdr));
@@ -3469,15 +3465,12 @@ function saveSummaryTopAccounts(){
 function printPage(id){
   if(id==='summary'){
     const data=summaryFilteredEntries();
-    // Balance-based totals (per account net, summed) — same logic as the on-screen Summary stats,
-    // NOT the raw entry-level totals. This is what should show on the printed Summary.
-    const accBal={};
-    data.forEach(e=>{
-      if(!accBal[e.name])accBal[e.name]=0;
-      accBal[e.name]+=(e.type==='CR'?e.amount:-e.amount);
-    });
+    // Total Credit / Total Debit — raw sum of every CR entry and every DR entry (no per-account
+    // netting), matching the on-screen Summary stats.
     let tcr=0,tdr=0;
-    Object.values(accBal).forEach(b=>{if(b>0)tcr+=b;else tdr+=Math.abs(b);});
+    data.forEach(e=>{
+      if(e.type==='CR')tcr+=e.amount;else tdr+=e.amount;
+    });
     const m=buildSummaryModel(data);
     const PRINT_GROUP_STYLES={
       'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
