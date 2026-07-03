@@ -120,9 +120,10 @@
   .ru-translate-host input{padding-right:26px !important;}
 
   /* Floating quick-action button */
-  .fab-wrap{position:fixed;right:22px;bottom:22px;z-index:400;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
+  .fab-wrap{position:fixed;right:22px;bottom:22px;z-index:400;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none;}
   .fab-menu{display:flex;flex-direction:column;gap:9px;margin-bottom:2px;opacity:0;transform:translateY(10px) scale(.9);pointer-events:none;transition:all .22s ease;}
   .fab-wrap.open .fab-menu{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  .fab-main{pointer-events:auto;}
   .fab-item{display:flex;align-items:center;gap:9px;background:var(--card-bg);color:var(--primary);border:1px solid var(--border);border-radius:30px;padding:9px 16px 9px 9px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow-md);cursor:pointer;white-space:nowrap;transition:all .2s;}
   .fab-item:hover{background:var(--primary);color:#fff;transform:translateX(-2px);}
   .fab-item .fab-ic{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent-deep),var(--accent-light));display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
@@ -2879,15 +2880,16 @@ function obAddBulkRows(){
   toast(n+' nayi rows add ho gayin! ✅','success');
 }
 
-// If `name` doesn't already exist anywhere, create it: as a Paid Account (with `paidNo`) when a Paid No
-// was given on this row, otherwise as a normal Account. Existing names (either list) are left untouched.
-function obEnsureAccountExists(name,paidNo){
+// If `name` doesn't already exist anywhere, create it: as a Paid Account (with `paidNo`) when this
+// side of the row is the "paid" side, otherwise as a normal Account. Existing names (either list)
+// are left untouched.
+function obEnsureAccountExists(name,paidNo,treatAsPaid){
   const val=String(name||'').trim();
   if(!val)return;
   if(accounts.find(a=>a.name.toLowerCase()===val.toLowerCase()))return;
   if(paidAccounts.find(a=>a.name.toLowerCase()===val.toLowerCase()))return;
   const pno=String(paidNo||'').trim();
-  if(pno && !paidAccounts.find(a=>a.paidNo===pno)){
+  if(pno && treatAsPaid && !paidAccounts.find(a=>a.paidNo===pno)){
     paidAccounts.push({id:uid(),name:val,paidNo:pno,phone:''});
     savePaid();
     toast(`"${val}" naya Paid Account ban gaya! 💳`,'success');
@@ -2901,8 +2903,21 @@ function obEnsureAccountExists(name,paidNo){
 // Builds/updates the DR+CR ledger entry pair for one Opening Balance row, and links whichever side
 // (if any) matches a Paid Account with this row's Paid No into the Paid Accounts ledger too.
 function obSyncRowEntries(row){
-  obEnsureAccountExists(row.debitAcc,row.paidNo);
-  obEnsureAccountExists(row.creditAcc,row.paidNo);
+  const pno=String(row.paidNo||'').trim();
+  // Which side is the "paid" side? Prefer whichever account name is already tagged with the P- prefix
+  // (the app's own Paid-account naming convention) — this stops a Paid No from being mis-applied to
+  // the wrong side (e.g. "Cash") just because it happened to be processed first. If neither side is
+  // P--prefixed but a Paid No was still given, fall back to the old "first new name wins" behaviour.
+  let debitIsPaid=classifyAccountPrefix(row.debitAcc)==='P';
+  let creditIsPaid=classifyAccountPrefix(row.creditAcc)==='P';
+  if(pno && !debitIsPaid && !creditIsPaid){
+    const debitIsNew=!accounts.find(a=>a.name.toLowerCase()===String(row.debitAcc||'').trim().toLowerCase())
+      && !paidAccounts.find(a=>a.name.toLowerCase()===String(row.debitAcc||'').trim().toLowerCase());
+    debitIsPaid=debitIsNew;
+    creditIsPaid=!debitIsNew;
+  }
+  obEnsureAccountExists(row.debitAcc,row.paidNo,debitIsPaid);
+  obEnsureAccountExists(row.creditAcc,row.paidNo,creditIsPaid);
 
   function makeOrUpdate(role,side,name,amount){
     const eid=row.id+'_'+role;
@@ -3182,7 +3197,27 @@ function restoreEntry(id){
   const idx=recycleBin.findIndex(x=>x.id===id);
   if(idx===-1)return;
   const e=recycleBin[idx];
+  const deletedFrom=e.deletedFrom;
   delete e.deletedAt;delete e.deletedFrom;
+
+  // Paid Account ledger entries (deleted from a Paid Account's own detail page) restore straight
+  // back into paidEntries, not into the main entries/cashbook list.
+  if(deletedFrom==='paidEntry'){
+    delete e.name;
+    const paidAccStillExists=paidAccounts.find(a=>a.id===e.paidAccId);
+    if(!paidAccStillExists){
+      toast('Yeh Paid Account ab maujood nahi — restore nahi ho saka','error');
+      return;
+    }
+    paidEntries.push(e);
+    recycleBin.splice(idx,1);
+    savePaid();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+    refreshDash();renderRecycleBin();
+    if(currentPaidAccId===e.paidAccId)renderPaidAccDetail(currentPaidAccId);
+    toast('Entry restore ho gayi! ✅','success');
+    return;
+  }
+
   entries.push(e);
   recycleBin.splice(idx,1);
   // re-link to its paid account if it had one and that account still exists
@@ -3800,9 +3835,18 @@ function savePaidCell(el,id){
   savePaid();renderPaidAccDetail(currentPaidAccId);
 }
 function deletePaidEntry(id){
-  if(!confirm('Entry delete karna chahte hain?'))return;
+  if(!confirm('Entry delete karna chahte hain? (Recycle Bin mein jayegi)'))return;
+  const e=paidEntries.find(x=>x.id===id);
+  if(e){
+    const pa=paidAccounts.find(a=>a.id===e.paidAccId);
+    const copy={...e,name:(pa?pa.name:'Paid Account'),deletedAt:new Date().toISOString(),deletedFrom:'paidEntry'};
+    recycleBin.push(copy);
+    DB.set('cargo_recycle',recycleBin);
+  }
   paidEntries=paidEntries.filter(x=>x.id!==id);
-  savePaid();renderPaidAccDetail(currentPaidAccId);toast('Entry delete ho gayi!','');
+  savePaid();renderPaidAccDetail(currentPaidAccId);
+  if(document.getElementById('page-backup').classList.contains('active'))renderRecycleBin();
+  toast('Entry Recycle Bin mein gayi! ↩️ Wapas la sakte hain.','success');
 }
 function printPaidDetail(){
   if(!currentPaidAccId)return;
