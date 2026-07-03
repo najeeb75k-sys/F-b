@@ -2195,39 +2195,12 @@ function cbFieldChange(el){
     entries.filter(e=>(e.pairId||e.id)===pid).forEach(e=>{
       e.paidNo=paidVal;
       matched=true;
-      const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
-      if(paidAcc){
-        // Create or update the linked paid-ledger entry so it always mirrors the cashbook row
-        if(!existingLink){
-          paidEntries.push({
-            id:uid(),
-            paidAccId:paidAcc.id,
-            cashbookRef:e.id,
-            date:e.date||today(),
-            type:e.type,
-            amount:e.amount||0,
-            desc:e.desc||'',
-            ref:e.ref||''
-          });
-        }else{
-          existingLink.paidAccId=paidAcc.id;
-          existingLink.date=e.date||today();
-          existingLink.type=e.type;
-          existingLink.amount=e.amount||0;
-          existingLink.desc=e.desc||'';
-          existingLink.ref=e.ref||'';
-        }
-        savePaid();
-      }else if(existingLink){
-        // Paid No cleared or changed to something that no longer matches any account — unlink it
-        paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==e.id);
-        savePaid();
-      }
     });
     if(!matched){
       if(!window.cbPendingPaidNo) window.cbPendingPaidNo={};
       window.cbPendingPaidNo[pid]=paidVal;
     }
+    cbSyncPaidLink(pid);
     save();
     if(paidAcc) toast('Paid Account "'+paidAcc.name+'" se link ho gaya! ✅','success');
     return;
@@ -2238,6 +2211,7 @@ function cbFieldChange(el){
   }else{
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     cbUpsertField(pid,side,field,value);
+    cbSyncPaidLink(pid);
   }
 
   const q=(document.getElementById('cbSearch')?.value||'').trim();
@@ -2267,6 +2241,35 @@ function cbUpdateTotalsOnly(){
   const totalsEl=document.getElementById('cashbookTotals');
   if(!totalsEl)return;
   totalsEl.textContent='Debit: '+fmt(tdr)+' | Credit: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr));
+}
+
+// Keeps a Cashbook row's linked Paid Account ledger entry in sync: exactly ONE side of the row
+// (whichever side's account name actually matches the Paid Account for this row's Paid No) mirrors
+// into paidEntries with the correct DR/CR type — the other side is never linked there, even though
+// both DR and CR entries share the same row/pairId/paidNo.
+function cbSyncPaidLink(pid){
+  const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
+  const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
+  const paidVal=(dr&&dr.paidNo)||(cr&&cr.paidNo)||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
+  const paidAcc=paidVal?paidAccounts.find(a=>a.paidNo===paidVal):null;
+  let changed=false;
+  [dr,cr].forEach(e=>{
+    if(!e)return;
+    const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
+    const nameMatches=paidAcc && e.name && e.name.trim().toLowerCase()===paidAcc.name.trim().toLowerCase();
+    if(nameMatches){
+      if(!existingLink){
+        paidEntries.push({id:uid(),paidAccId:paidAcc.id,cashbookRef:e.id,date:e.date||today(),type:e.type,amount:e.amount||0,desc:e.desc||'',ref:e.ref||''});
+      }else{
+        existingLink.paidAccId=paidAcc.id;existingLink.date=e.date||today();existingLink.type=e.type;existingLink.amount=e.amount||0;existingLink.desc=e.desc||'';existingLink.ref=e.ref||'';
+      }
+      changed=true;
+    }else if(existingLink){
+      paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==e.id);
+      changed=true;
+    }
+  });
+  if(changed)savePaid();
 }
 
 // Field order across one cashbook row, left to right — used for arrow-key/Enter navigation.
@@ -3212,6 +3215,7 @@ function restoreEntry(id){
     paidEntries.push(e);
     recycleBin.splice(idx,1);
     savePaid();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+    if(!e.cashbookRef)syncPaidEntryMirror(e);
     refreshDash();renderRecycleBin();
     if(currentPaidAccId===e.paidAccId)renderPaidAccDetail(currentPaidAccId);
     toast('Entry restore ho gayi! ✅','success');
@@ -3255,13 +3259,17 @@ function printCashbook(){
 let summaryTopAccounts = DB.get('summary_top_accounts', ['','','']);
 
 // Classifies an account name by its prefix. Checks "PA-" before "P-" (and "Party-" before "P-")
-// since they share a leading letter — longer/more-specific prefixes must be tested first.
+// since they share a leading letter — longer/more-specific prefixes must be tested first. Any account
+// that's structurally a Paid Account (exists in paidAccounts) is also classified as "P", even if its
+// name doesn't happen to carry the "P-" prefix — Summary shouldn't require a specific naming convention
+// to recognise an account that's already tagged as Paid elsewhere in the app.
 function classifyAccountPrefix(name){
   const n=(name||'').trim().toLowerCase();
   if(n.startsWith('pa-'))return 'PA';
   if(n.startsWith('party-'))return 'PARTY';
   if(n.startsWith('v-'))return 'V';
   if(n.startsWith('p-'))return 'P';
+  if(paidAccounts.find(a=>(a.name||'').trim().toLowerCase()===n))return 'P';
   return null;
 }
 
@@ -3754,9 +3762,45 @@ function savePaidAccModal(){
 }
 function deletePaidAcc(id){
   if(!confirm('Yeh paid account delete karna chahte hain? Iski saari entries bhi jayengi!'))return;
+  // Manually-added rows on this account's own ledger have a mirror entry in entries[] — clean those up too
+  paidEntries.filter(e=>e.paidAccId===id && !e.cashbookRef).forEach(e=>removePaidEntryMirror(e.id));
   paidAccounts=paidAccounts.filter(a=>a.id!==id);
   paidEntries=paidEntries.filter(e=>e.paidAccId!==id);
   savePaid();renderPaidAccounts();toast('Delete ho gaya!','');
+}
+
+// Manual rows added directly on a Paid Account's own ledger (i.e. no cashbookRef — not generated from
+// Cashbook/TP Entry/Opening Balance) used to live ONLY in paidEntries, invisible to the Dashboard,
+// Accounts List and Summary, which all read from the shared `entries[]` array. This mirrors them into
+// `entries[]` too (tagged paidMirrorId, id = paidEntry id + '_mirror') so a manually-added Paid Account
+// transaction behaves like every other transaction in the system. Entries that DO have a cashbookRef
+// are never mirrored here — for those, the cashbook row itself already IS the entries[] record.
+function syncPaidEntryMirror(pe){
+  const acc=paidAccounts.find(a=>a.id===pe.paidAccId);
+  const mid=pe.id+'_mirror';
+  const valid=acc && pe.amount>0;
+  if(!valid){
+    const before=entries.length;
+    entries=entries.filter(x=>x.id!==mid);
+    if(entries.length!==before)save();
+    return;
+  }
+  let m=entries.find(x=>x.id===mid);
+  if(!m){m={id:mid,paidMirrorId:pe.id};entries.push(m);}
+  m.date=pe.date||today();
+  m.name=acc.name;
+  m.type=pe.type;
+  m.amount=pe.amount;
+  m.desc=pe.desc||'';
+  m.ref=pe.ref||'';
+  m.paidNo=acc.paidNo||'';
+  save();
+}
+function removePaidEntryMirror(peId){
+  const mid=peId+'_mirror';
+  const before=entries.length;
+  entries=entries.filter(x=>x.id!==mid);
+  if(entries.length!==before)save();
 }
 
 function openPaidAccDetail(id){
@@ -3821,7 +3865,13 @@ function togglePaidType(id,type){
   cell.innerHTML=`<input type="number" class="input" style="padding:5px 7px;font-size:13px;width:90px;" value="${current||''}" autofocus>`;
   const inp=cell.querySelector('input');
   inp.focus();inp.select();
-  const commit=()=>{const val=parseFloat(inp.value);if(val&&val>0){e.type=type;e.amount=val;}savePaid();renderPaidAccDetail(currentPaidAccId);};
+  const commit=()=>{
+    const val=parseFloat(inp.value);
+    if(val&&val>0){e.type=type;e.amount=val;}
+    savePaid();
+    if(!e.cashbookRef)syncPaidEntryMirror(e);
+    renderPaidAccDetail(currentPaidAccId);refreshDash();
+  };
   inp.addEventListener('blur',commit);
   inp.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();inp.blur();}});
 }
@@ -3832,7 +3882,9 @@ function savePaidCell(el,id){
   if(field==='date'){if(/^\d{4}-\d{2}-\d{2}$/.test(val)){e.date=val;}else{el.textContent=e.date;toast('Date format YYYY-MM-DD mein darain','error');return;}}
   else if(field==='desc'){e.desc=val;}
   else if(field==='ref'){e.ref=val;}
-  savePaid();renderPaidAccDetail(currentPaidAccId);
+  savePaid();
+  if(!e.cashbookRef)syncPaidEntryMirror(e);
+  renderPaidAccDetail(currentPaidAccId);refreshDash();
 }
 function deletePaidEntry(id){
   if(!confirm('Entry delete karna chahte hain? (Recycle Bin mein jayegi)'))return;
@@ -3842,9 +3894,10 @@ function deletePaidEntry(id){
     const copy={...e,name:(pa?pa.name:'Paid Account'),deletedAt:new Date().toISOString(),deletedFrom:'paidEntry'};
     recycleBin.push(copy);
     DB.set('cargo_recycle',recycleBin);
+    if(!e.cashbookRef)removePaidEntryMirror(e.id);
   }
   paidEntries=paidEntries.filter(x=>x.id!==id);
-  savePaid();renderPaidAccDetail(currentPaidAccId);
+  savePaid();renderPaidAccDetail(currentPaidAccId);refreshDash();
   if(document.getElementById('page-backup').classList.contains('active'))renderRecycleBin();
   toast('Entry Recycle Bin mein gayi! ↩️ Wapas la sakte hain.','success');
 }
