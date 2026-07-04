@@ -74,6 +74,17 @@
   .wp-loadbar span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent-deep),var(--accent-light));border-radius:3px;animation:wpLoad 1.4s ease forwards;}
   @keyframes wpLoad{to{width:100%;}}
 
+  /* BISMILLAH — golden stylish Urdu, sits on the left half of the splash and slides away with it */
+  .wp-bismillah{position:absolute;top:14%;left:0;right:0;text-align:center;z-index:3;pointer-events:none;}
+  .wp-bismillah span{font-family:'Noto Nastaliq Urdu',serif;font-size:30px;font-weight:700;line-height:1.9;
+    background:linear-gradient(160deg,#fff3cf 0%,#e0a83f 35%,#c17f0e 60%,#9c6608 85%,#e0a83f 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e0a83f;
+    filter:drop-shadow(0 0 14px rgba(224,168,63,.55)) drop-shadow(0 2px 3px rgba(0,0,0,.35));
+    letter-spacing:.5px;animation:wpBismillahGlow 2.6s ease-in-out infinite;}
+  @keyframes wpBismillahGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(224,168,63,.45)) drop-shadow(0 2px 3px rgba(0,0,0,.35));}
+    50%{filter:drop-shadow(0 0 22px rgba(224,168,63,.85)) drop-shadow(0 2px 3px rgba(0,0,0,.35));}}
+  @media(max-width:520px){.wp-bismillah span{font-size:22px;}}
+
   /* APP */
   #mainApp{display:none;min-height:100vh;}
   .topbar{background:linear-gradient(120deg,var(--primary-dark) 0%,var(--primary) 55%,var(--primary-light) 100%);color:white;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 18px rgba(8,26,48,.28);position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(193,127,14,.25);}
@@ -309,7 +320,9 @@
 
 <!-- WELCOME / SPLASH -->
 <div id="welcomePage">
-  <div class="wp-half wp-left"></div>
+  <div class="wp-half wp-left">
+    <div class="wp-bismillah"><span>بِسْمِ اللّٰہِ الرَّحْمٰنِ الرَّحِیْمِ</span></div>
+  </div>
   <div class="wp-half wp-right"></div>
   <div class="wp-content">
     <span class="wp-truck">🚛</span>
@@ -402,6 +415,7 @@
       <div class="nav-item staff-hide" data-page="paidAccounts" onclick="showPage('paidAccounts',this)"><span>💳</span> <span>Paid Accounts</span></div>
       <div class="nav-sec" data-i18n="navReports">Reports</div>
       <div class="nav-item" data-page="summary" onclick="showPage('summary',this)"><span>📈</span> <span data-i18n="navSummary">Summary</span></div>
+      <div class="nav-item staff-hide" data-page="paReport" onclick="showPage('paReport',this)"><span>📑</span> <span>PA Report</span></div>
       <div class="nav-item" data-page="print" onclick="showPage('print',this)"><span>🖨️</span> <span data-i18n="navPrint">Print</span></div>
       <div class="nav-sec staff-hide" data-i18n="navSystem">System</div>
       <div class="nav-item staff-hide" data-page="backup" onclick="showPage('backup',this)"><span>💾</span> <span data-i18n="navBackup">Backup</span></div>
@@ -783,6 +797,28 @@
             </tr></thead>
             <tbody id="summaryBody"></tbody></table>
           </div>
+        </div>
+      </div>
+
+      <!-- PA REPORT -->
+      <div class="page" id="page-paReport">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📑 PA Report</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-light);margin-bottom:14px;">Neeche teenon mein se ek account chunein — har account ka apna report style hai.</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;" class="no-print">
+            <button class="btn btn-outline btn-sm par-tab" data-par="tyre" onclick="setPAReportTab('tyre')">🛞 Pa-Tyre Copy</button>
+            <button class="btn btn-outline btn-sm par-tab" data-par="profit" onclick="setPAReportTab('profit')">💰 Pa-Profit</button>
+            <button class="btn btn-outline btn-sm par-tab" data-par="expense" onclick="setPAReportTab('expense')">💸 Pa-Extra Expense</button>
+          </div>
+
+          <!-- account not found notice -->
+          <div id="parMissing" style="display:none;padding:14px;background:#fef9c3;border:1px solid #fde047;border-radius:10px;font-size:12.5px;color:#854d0e;margin-bottom:14px;">
+            ⚠️ Yeh account Accounts List mein nahi mila. Accounts List mein <b id="parMissingName"></b> naam se ek account banayein (Accounts List → Add Account), phir yahan uski entries nazar aayengi.
+          </div>
+
+          <div id="parContent"></div>
         </div>
       </div>
 
@@ -1386,6 +1422,8 @@ let paidEntries = DB.get("cargo_paid_entries",[]);
 let currentPaidAccId = null;
 let tpRows = DB.get("cargo_tp_rows",[]);
 let obRows = DB.get("cargo_ob_rows",[]);
+let currentPARTab = 'tyre';
+let currentPARMonth = new Date().toISOString().slice(0,7);
 
 // HELPERS
 function uid(){return Date.now().toString(36)+Math.random().toString(36).substr(2);}
@@ -1560,6 +1598,7 @@ function showPage(id,el){
   if(id==='summary')renderSummary();
   if(id==='backup'){renderRecycleBin();}
   if(id==='paidAccounts')renderPaidAccounts();
+  if(id==='paReport')setPAReportTab(currentPARTab);
   if(id==='print')updateAccLists();
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarOverlay').classList.toggle('open');}
@@ -3293,6 +3332,17 @@ function renderRecycleBin(){
       <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
     </div>`;
     }
+    if(e.deletedFrom==='paidAccount'){
+      return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">💳 ${e.name} <span style="font-size:10px;color:#94a3b8;font-weight:500;">(Paid Account)</span></div>
+        <div style="font-size:11px;color:var(--text-light);">Paid No: ${e.paidNo||'-'} | ${e.phone||'-'} | ${(e.paidEntriesBackup||[]).length} entries</div>
+        <div style="font-size:10px;color:#ef4444;">Deleted: ${new Date(e.deletedAt).toLocaleDateString('en-PK')}</div>
+      </div>
+      <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
+    </div>`;
+    }
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
       <div>
@@ -3322,6 +3372,23 @@ function restoreEntry(id){
     save();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
     renderAccounts();updateAccLists();refreshDash();renderRecycleBin();
     toast('Account restore ho gaya! ✅','success');
+    return;
+  }
+
+  // Deleted Paid Account restores back into paidAccounts along with all of its own ledger entries.
+  if(deletedFrom==='paidAccount'){
+    if(paidAccounts.find(a=>a.name.toLowerCase()===e.name.toLowerCase())){
+      toast('"'+e.name+'" naam se Paid Account pehle se maujood hai — restore nahi ho saka','error');
+      return;
+    }
+    const backup=e.paidEntriesBackup||[];
+    delete e.paidEntriesBackup;
+    paidAccounts.push(e);
+    backup.forEach(pe=>{paidEntries.push(pe);if(!pe.cashbookRef)syncPaidEntryMirror(pe);});
+    recycleBin.splice(idx,1);
+    savePaid();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+    renderPaidAccounts();refreshDash();renderRecycleBin();
+    toast('Paid Account restore ho gaya! ✅','success');
     return;
   }
 
@@ -3432,6 +3499,134 @@ function buildSummaryModel(data){
   const top=summaryTopAccounts.filter(Boolean).map(n=>({name:n,cr:am[n]?.cr||0,dr:am[n]?.dr||0}));
 
   return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames};
+}
+
+// ===================== PA REPORT (Pa-Tyre Copy / Pa-Profit / Pa-Extra Expense) =====================
+// Finds the matching account for a report tab. Prefers accounts explicitly named with the "PA-"
+// prefix (e.g. "PA-Tyre Copy"), but falls back to any account whose name contains the keyword so
+// the report still works even if the user didn't use the exact "PA-" prefix.
+function findPAAccount(keywords){
+  const kws=keywords.map(k=>k.toLowerCase());
+  let match=accounts.find(a=>{
+    const n=(a.name||'').trim().toLowerCase();
+    return n.startsWith('pa-') && kws.some(k=>n.includes(k));
+  });
+  if(!match){
+    match=accounts.find(a=>{
+      const n=(a.name||'').trim().toLowerCase();
+      return kws.some(k=>n.includes(k));
+    });
+  }
+  return match||null;
+}
+const PAR_CONFIG={
+  tyre:{kws:['tyre','tire'],label:'PA-Tyre Copy',mode:'month'},
+  profit:{kws:['profit'],label:'PA-Profit',mode:'allmonths'},
+  expense:{kws:['expense','kharch','kharcha'],label:'PA-Extra Expense',mode:'month'},
+};
+function setPAReportTab(tab){
+  currentPARTab=tab;
+  document.querySelectorAll('.par-tab').forEach(b=>{
+    const active=b.dataset.par===tab;
+    b.classList.toggle('btn-primary',active);
+    b.classList.toggle('btn-outline',!active);
+  });
+  renderPAReportPage();
+}
+function renderPAReportPage(){
+  const c=PAR_CONFIG[currentPARTab];
+  const acc=findPAAccount(c.kws);
+  const missing=document.getElementById('parMissing');
+  const content=document.getElementById('parContent');
+  if(!missing||!content)return;
+  if(!acc){
+    missing.style.display='block';
+    document.getElementById('parMissingName').textContent=c.label;
+    content.innerHTML='';
+    return;
+  }
+  missing.style.display='none';
+  const accEntries=entries.filter(e=>e.name===acc.name);
+  content.innerHTML = c.mode==='month'
+    ? renderPARMonthMode(accEntries,currentPARTab)
+    : renderPARAllMonths(accEntries);
+}
+function parMonthChanged(val){currentPARMonth=val;renderPAReportPage();}
+function renderPARMonthMode(accEntries,tab){
+  if(!currentPARMonth)currentPARMonth=new Date().toISOString().slice(0,7);
+  const monthEntries=accEntries.filter(e=>(e.date||'').slice(0,7)===currentPARMonth).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const cr=monthEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
+  const dr=monthEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+  const [y,m]=currentPARMonth.split('-');
+  const monthLabel=new Date(Number(y),Number(m)-1,1).toLocaleDateString('en-PK',{month:'long',year:'numeric'});
+  const rows=monthEntries.map((e,i)=>`<tr>
+      <td style="color:var(--text-light);">${i+1}</td><td>${e.date}</td>
+      <td style="text-align:right;${e.type==='DR'?'color:#dc2626;font-weight:700;':''}">${e.type==='DR'?fmt(e.amount):'-'}</td>
+      <td style="text-align:right;${e.type==='CR'?'color:#15803d;font-weight:700;':''}">${e.type==='CR'?fmt(e.amount):'-'}</td>
+      <td>${e.desc||'-'}</td><td>${e.ref||'-'}</td>
+    </tr>`).join('');
+  const expenseHighlight = tab==='expense'
+    ? `<div class="stat-card"><div class="stat-icon">💸</div><div class="stat-label">Is Mahine Ka Kharcha</div><div class="stat-value red">${fmt(dr)}</div></div>`
+    : `<div class="stat-card"><div class="stat-icon">⚖️</div><div class="stat-label">Net Balance</div><div class="stat-value">${fmt(Math.abs(cr-dr))} ${cr-dr>=0?'CR':'DR'}</div></div>`;
+  return `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;" class="no-print">
+      <label style="font-size:12.5px;font-weight:600;color:var(--text-light);">📅 Month Chunein:</label>
+      <input type="month" class="input" style="width:170px;" id="parMonthPicker" value="${currentPARMonth}" onchange="parMonthChanged(this.value)">
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">Total Credit — ${monthLabel}</div><div class="stat-value green">${fmt(cr)}</div></div>
+      <div class="stat-card"><div class="stat-icon">💸</div><div class="stat-label">Total Debit — ${monthLabel}</div><div class="stat-value red">${fmt(dr)}</div></div>
+      ${expenseHighlight}
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>#</th><th data-i18n="date">Date</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th data-i18n="description">Description</th><th data-i18n="refNo">Ref</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" style="padding:24px;text-align:center;color:#94a3b8;">Is mahine ki koi entry nahi</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+function renderPARAllMonths(accEntries){
+  const map={};
+  accEntries.forEach(e=>{
+    const mk=(e.date||'').slice(0,7);
+    if(!mk)return;
+    if(!map[mk])map[mk]={cr:0,dr:0,count:0};
+    if(e.type==='CR')map[mk].cr+=e.amount; else map[mk].dr+=e.amount;
+    map[mk].count++;
+  });
+  const months=Object.keys(map).sort().reverse();
+  let tcr=0,tdr=0,tcount=0;
+  const rows=months.map(mk=>{
+    const d=map[mk];tcr+=d.cr;tdr+=d.dr;tcount+=d.count;
+    const [y,m]=mk.split('-');
+    const label=new Date(Number(y),Number(m)-1,1).toLocaleDateString('en-PK',{month:'long',year:'numeric'});
+    const net=d.cr-d.dr;
+    return `<tr>
+      <td style="font-weight:600;">${label}</td>
+      <td style="text-align:right;color:#15803d;font-weight:600;">${fmt(d.cr)}</td>
+      <td style="text-align:right;color:#dc2626;font-weight:600;">${fmt(d.dr)}</td>
+      <td style="text-align:right;font-weight:700;color:${net>=0?'#15803d':'#dc2626'};">${fmt(Math.abs(net))} ${net>=0?'Profit':'Loss'}</td>
+      <td style="text-align:center;">${d.count}</td>
+    </tr>`;
+  }).join('');
+  const tnet=tcr-tdr;
+  return `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">Grand Total ${tnet>=0?'Profit':'Loss'}</div><div class="stat-value ${tnet>=0?'green':'red'}">${fmt(Math.abs(tnet))}</div></div>
+      <div class="stat-card"><div class="stat-icon">📋</div><div class="stat-label">Total Mahine</div><div class="stat-value">${months.length}</div></div>
+      <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-label">Total Log / Trips</div><div class="stat-value">${tcount}</div></div>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Month</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Profit / Loss</th><th style="text-align:center;">Kitne Log/Trip</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" style="padding:24px;text-align:center;color:#94a3b8;">Koi entry nahi mili</td></tr>'}</tbody>
+      <tfoot><tr style="background:#eef2f8;">
+        <td style="font-weight:700;">TOTAL</td>
+        <td style="text-align:right;font-weight:700;color:#15803d;">${fmt(tcr)}</td>
+        <td style="text-align:right;font-weight:700;color:#dc2626;">${fmt(tdr)}</td>
+        <td style="text-align:right;font-weight:700;color:${tnet>=0?'#15803d':'#dc2626'};">${fmt(Math.abs(tnet))} ${tnet>=0?'Profit':'Loss'}</td>
+        <td style="text-align:center;font-weight:700;">${tcount}</td>
+      </tr></tfoot>
+      </table>
+    </div>`;
 }
 
 function summaryFilteredEntries(){
@@ -3879,12 +4074,21 @@ function savePaidAccModal(){
   savePaid();renderPaidAccounts();closeModal('paidAccModal');
 }
 function deletePaidAcc(id){
-  if(!confirm('Yeh paid account delete karna chahte hain? Iski saari entries bhi jayengi!'))return;
+  if(!confirm('Yeh paid account delete karna chahte hain? (Recycle Bin mein jayega)'))return;
+  const a=paidAccounts.find(x=>x.id===id);
   // Manually-added rows on this account's own ledger have a mirror entry in entries[] — clean those up too
   paidEntries.filter(e=>e.paidAccId===id && !e.cashbookRef).forEach(e=>removePaidEntryMirror(e.id));
+  // Keep the account itself plus all of its ledger entries so a restore brings everything back exactly as it was.
+  if(a){
+    const ownEntries=paidEntries.filter(e=>e.paidAccId===id);
+    const copy={...a,paidEntriesBackup:ownEntries,deletedAt:new Date().toISOString(),deletedFrom:'paidAccount'};
+    recycleBin.push(copy);
+    DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+  }
   paidAccounts=paidAccounts.filter(a=>a.id!==id);
   paidEntries=paidEntries.filter(e=>e.paidAccId!==id);
-  savePaid();renderPaidAccounts();toast('Delete ho gaya!','');
+  savePaid();renderPaidAccounts();renderRecycleBin();
+  toast('Paid Account Recycle Bin mein gaya! ↩️ Wapas la sakte hain.','');
 }
 
 // Manual rows added directly on a Paid Account's own ledger (i.e. no cashbookRef — not generated from
