@@ -1368,13 +1368,27 @@ function googleSignIn(){
   const btn=document.getElementById('googleSignInBtn');
   if(btn)btn.disabled=true;
   const provider=new firebase.auth.GoogleAuthProvider();
-  fbAuth.signInWithPopup(provider).then(result=>{
-    fbUser=result.user;
-    onSignedIn();
-  }).catch(err=>{
+  // Using redirect instead of a popup: popups are frequently blocked or silently fail on mobile
+  // browsers (and increasingly on desktop too, due to third-party cookie restrictions). Redirect
+  // takes the user to Google's sign-in page and back to this app afterwards — far more reliable,
+  // especially on phones. The result is picked up by fbAuth.getRedirectResult() below on page load.
+  fbAuth.signInWithRedirect(provider).catch(err=>{
     console.error(err);
     toast('Google sign-in fail ho gaya: '+(err.message||'kuch ghalat hua'),'error');
-  }).finally(()=>{if(btn)btn.disabled=false;});
+    if(btn)btn.disabled=false;
+  });
+}
+// Picks up the result after the browser comes back from Google's sign-in redirect page.
+if(FIREBASE_ENABLED && fbAuth){
+  fbAuth.getRedirectResult().then(result=>{
+    if(result && result.user){
+      fbUser=result.user;
+      onSignedIn();
+    }
+  }).catch(err=>{
+    console.error('Redirect sign-in failed',err);
+    if(err && err.code!=='auth/no-auth-event')toast('Google sign-in fail ho gaya: '+(err.message||'kuch ghalat hua'),'error');
+  });
 }
 
 function onSignedIn(){
