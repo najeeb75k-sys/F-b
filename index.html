@@ -2317,7 +2317,7 @@ function renderCashbook(){
       <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"></td>
       <td class="no-print" style="text-align:center;">${r.pairId?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="cbDeleteRow('${pid}')">🗑️</button>`:''}</td>
     </tr>`;
-  }).join('') + `<datalist id="cbAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="cbPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
+  }).join('') + `<datalist id="cbAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="cbPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
 
   const allEntries=rows.flatMap(r=>[r.dr,r.cr]).filter(Boolean);
   const tdr=allEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
@@ -2335,14 +2335,17 @@ function cbFieldChange(el){
   const row=el.closest('tr');
   const wasBlank=row && !row.querySelector('.btn-danger'); // no delete button yet = this row had no saved entry
 
-  // Account must already exist (created via Accounts List) — block the entry with an error instead
-  // of silently creating a brand-new account just because someone typed a new name here.
+  // Account must already exist — either as a normal Accounts List account, or as a Paid Account
+  // (Paid Accounts live in their own separate `paidAccounts` list) — otherwise block the entry
+  // with an error instead of silently creating a brand-new account just because someone typed a
+  // new name here.
   if(field==='name'){
     const val=value.trim();
     if(val){
-      const exists=accounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
+      const exists=accounts.find(a=>a.name.toLowerCase()===val.toLowerCase())
+        || paidAccounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
       if(!exists){
-        toast(`"${val}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');
+        toast(`"${val}" account maujood nahi hai! Pehle "Accounts List" ya "Paid Accounts" mein ye account banayein.`,'error');
         el.value='';
         el.focus();
         return;
