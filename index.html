@@ -2419,13 +2419,19 @@ function cbSyncPaidLink(pid){
   const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
   const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
   const paidVal=(dr&&dr.paidNo)||(cr&&cr.paidNo)||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
-  const paidAcc=paidVal?paidAccounts.find(a=>a.paidNo===paidVal):null;
+  const paidAccByNo=paidVal?paidAccounts.find(a=>a.paidNo===paidVal):null;
   let changed=false;
   [dr,cr].forEach(e=>{
     if(!e)return;
+    // Which Paid Account (if any) does this side actually belong to? Prefer the Paid No match,
+    // but ALSO fall back to matching the typed account name directly against the Paid Accounts
+    // list — previously a row only mirrored into the Paid Account ledger if the "Paid No" box
+    // was filled in, so typing a Paid Account's name without also entering its Paid No left the
+    // entry stuck in the Accounts List and missing from its Paid Account page.
+    const paidAccByName=e.name?paidAccounts.find(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase()):null;
+    const paidAcc=(paidAccByNo && e.name && e.name.trim().toLowerCase()===paidAccByNo.name.trim().toLowerCase())?paidAccByNo:paidAccByName;
     const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
-    const nameMatches=paidAcc && e.name && e.name.trim().toLowerCase()===paidAcc.name.trim().toLowerCase();
-    if(nameMatches){
+    if(paidAcc){
       if(!existingLink){
         paidEntries.push({id:uid(),paidAccId:paidAcc.id,cashbookRef:e.id,date:e.date||today(),type:e.type,amount:e.amount||0,desc:e.desc||'',ref:e.ref||''});
       }else{
