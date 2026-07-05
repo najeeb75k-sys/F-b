@@ -895,9 +895,26 @@
             <div style="font-size:13px;color:#1a237e;margin-bottom:14px;background:rgba(255,255,255,.6);padding:10px;border-radius:10px;">
               Google account se sign-in karein — phir is app ko kisi bhi mobile ya laptop par usi Google account se kholain, data khud-ba-khud sync ho jayega (real-time, koi manual export/import nahi).
             </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;background:rgba(255,255,255,.6);padding:10px;border-radius:10px;">
+              <div style="font-size:13px;color:#1a237e;"><b>📱 Is Device Ka Naam:</b> <span style="color:#3949ab;">ye naam har change ke sath save hota hai, taake pata chal sake kis mobile/laptop se change hua</span></div>
+              <input type="text" class="input" id="settingDeviceLabel" style="width:180px;" placeholder="e.g. Ahmed ka Phone">
+              <button class="btn btn-primary btn-sm" onclick="saveDeviceLabel()">Save</button>
+            </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;" id="backupSyncActions">
               <span style="font-size:12px;color:var(--text-light);">Sync control karne ke liye <b>Logout</b> karein aur login screen par "Sign in with Google" use karein.</span>
             </div>
+          </div>
+
+          <!-- ACTIVITY LOG — which device changed data, and when -->
+          <div style="background:#f8fafc;border:2px solid #cbd5e1;border-radius:16px;padding:20px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <span style="font-size:24px;">🕘</span>
+              <div>
+                <div style="font-weight:700;font-size:15px;color:#334155;">Activity Log</div>
+                <div style="font-size:12px;color:#64748b;">Aakhri 30 changes — kis device se, kab</div>
+              </div>
+            </div>
+            <div id="activityLogList" style="max-height:220px;overflow-y:auto;"></div>
           </div>
 
           <!-- Local Backup -->
@@ -1122,6 +1139,20 @@
   </div>
 </div>
 
+<!-- DEVICE NAME MODAL — pops up until THIS device has a label, so the Activity Log (Backup page)
+     can always show "which mobile/computer" made a change. Cannot be dismissed without a name,
+     so no device gets skipped. -->
+<div class="modal-overlay" id="deviceNameModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-hdr"><span class="modal-title">📱 Is Device Ka Naam Rakhein</span></div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:14px;">Taake baad mein Activity Log (Backup page) mein pata chal sake ke kis mobile/computer se change hua. Har device par ye ek dafa set karna hai.</div>
+    <div class="fg" style="margin-bottom:16px;"><label>Device Ka Naam</label><input type="text" class="input" id="deviceNameModalInput" placeholder="e.g. Ahmed ka Phone, Dukan Computer" onkeydown="if(event.key==='Enter')saveDeviceLabelFromModal()"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="saveDeviceLabelFromModal()">✅ Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div id="printArea"></div>
 
@@ -1296,6 +1327,11 @@ const FIREBASE_CONFIG = {
 const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('PASTE_');
 
 let fbApp=null, fbAuth=null, fbDb=null, fbUser=null, fbUnsub=null, fbSavePending=false, fbApplyingRemote=false;
+// Device name label — so when data changes via cloud sync, you can tell WHICH phone/laptop made the
+// change (Firestore itself has no concept of "device", only the signed-in Google account, so we tag
+// every push with a human-readable label the user sets once per device).
+let deviceLabel = DB.get('device_label','');
+let activityLog = DB.get('cargo_activity_log',[]); // [{device,at}], newest first, capped at 30
 
 if(FIREBASE_ENABLED){
   try{
@@ -1350,6 +1386,9 @@ function onSignedIn(){
   attachCloudSync();
   initApp();
   toast('Google account se sign-in ho gaya! ✅ Mobile/laptop sync chalu hai.','success');
+  if(!deviceLabel){
+    setTimeout(()=>toast('📱 Tip: Backup page mein jaa kar is device ka naam set karein — taake pata chale kis mobile se change hua',''),1500);
+  }
 }
 
 function attachCloudSync(){
@@ -1369,6 +1408,13 @@ function attachCloudSync(){
       tpRows=data.tpRows||tpRows;
       obRows=data.obRows||obRows;
       if(data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
+      if(data.activityLog){activityLog=data.activityLog;DB.set('cargo_activity_log',activityLog);}
+      // If this update came from a DIFFERENT device than this one, say so — this answers
+      // "which mobile changed it": whichever device label shows up here (and at the top of
+      // Backup → Activity Log) made the most recent change.
+      if(data.lastEditedBy && data.lastEditedBy!==(deviceLabel||'Unknown Device')){
+        toast('📱 Data update hua — "'+data.lastEditedBy+'" ne change kiya','');
+      }
       DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
       DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);
       // refresh whichever page is open so the other device's edits appear instantly
@@ -1391,6 +1437,7 @@ function attachCloudSync(){
       if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
       if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
       if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
+      if(document.getElementById('page-backup')?.classList.contains('active')){renderRecycleBin();renderActivityLog();}
       if(document.getElementById('page-paidAccounts')?.classList.contains('active'))renderPaidAccounts();
       if(document.getElementById('page-paidAccDetail')?.classList.contains('active')&&currentPaidAccId)renderPaidAccDetail(currentPaidAccId);
       fbApplyingRemote=false;
@@ -1419,7 +1466,11 @@ function pushToCloud(fields){
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
-    const payload={...fbPendingFields, updatedAt:new Date().toISOString()};
+    // Record who made this change: prepend to the activity log (capped at 30) so it's visible
+    // to every device this account signs in on — this is how you find out "which mobile changed it".
+    activityLog=[{device:deviceLabel||'Unknown Device',at:new Date().toISOString()},...activityLog].slice(0,30);
+    DB.set('cargo_activity_log',activityLog);
+    const payload={...fbPendingFields, activityLog, lastEditedBy:deviceLabel||'Unknown Device', updatedAt:new Date().toISOString()};
     fbPendingFields=null;
     fbDb.collection('cargo_data').doc(fbUser.uid).set(payload,{merge:true}).then(()=>{
       setSyncBadge('connected');
@@ -1559,6 +1610,7 @@ function initApp(){
   document.getElementById('currentDate').textContent=new Date().toLocaleDateString('en-PK',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
   document.getElementById('settingCo').value=cfg.company;
   document.getElementById('settingUser').value=cfg.user;
+  document.getElementById('settingDeviceLabel').value=deviceLabel;
   // Migrate old single staff login (cfg.staffUser/staffPass) into the new 5-user array, once.
   if(!cfg.staffUsers){
     cfg.staffUsers=[];
@@ -1571,6 +1623,11 @@ function initApp(){
   refreshDash();
   updateAccLists();
   checkDuplicatePaidNos();
+  // Ask for this device's name once, so Activity Log (Backup page) can always show which
+  // mobile/computer made a change. Skipped for staff logins — the label is per-device/owner.
+  if(!deviceLabel && !isStaffUser){
+    setTimeout(()=>openModal('deviceNameModal'),400);
+  }
 }
 const STAFF_USER_LIMIT=5;
 function renderStaffLoginRows(){
@@ -1626,7 +1683,7 @@ function showPage(id,el){
   if(id==='obEntry'){renderObEntries();}
   if(id==='accounts')renderAccounts();
   if(id==='summary')renderSummary();
-  if(id==='backup'){renderRecycleBin();}
+  if(id==='backup'){renderRecycleBin();renderActivityLog();}
   if(id==='paidAccounts')renderPaidAccounts();
   if(id==='paReport')setPAReportTab(currentPARTab);
   if(id==='print')updateAccLists();
@@ -3339,6 +3396,41 @@ function printOb(){
 
 // ===== RECYCLE BIN =====
 let recycleBin=DB.get('cargo_recycle',[]);
+function saveDeviceLabel(){
+  const v=document.getElementById('settingDeviceLabel').value.trim();
+  if(!v){toast('Device ka naam darain!','error');return;}
+  deviceLabel=v;
+  DB.set('device_label',deviceLabel);
+  toast('Device naam save ho gaya! Ab agli change is naam ke sath record hogi. ✅','success');
+}
+
+// Same as above but from the startup modal — also closes the modal and keeps the Settings-page
+// field in sync so it shows the name if the user opens Backup afterwards.
+function saveDeviceLabelFromModal(){
+  const v=(document.getElementById('deviceNameModalInput').value||'').trim();
+  if(!v){toast('Device ka naam darain!','error');return;}
+  deviceLabel=v;
+  DB.set('device_label',deviceLabel);
+  const settingsInput=document.getElementById('settingDeviceLabel');
+  if(settingsInput)settingsInput.value=v;
+  closeModal('deviceNameModal');
+  toast('Shukriya! Ab is device ("'+v+'") ka naam Activity Log mein dikhega. ✅','success');
+}
+
+function renderActivityLog(){
+  const list=document.getElementById('activityLogList');
+  if(!list)return;
+  if(!activityLog.length){
+    list.innerHTML='<div style="text-align:center;padding:16px;color:#94a3b8;font-size:13px;">Abhi tak koi record nahi — pehli change hone par yahan dikhega</div>';
+    return;
+  }
+  list.innerHTML=activityLog.map((a,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #e2e8f0;${i===0?'background:#eff6ff;':''}">
+      <span style="font-size:13px;font-weight:${i===0?'700':'500'};color:#334155;">📱 ${a.device}</span>
+      <span style="font-size:11px;color:#64748b;">${new Date(a.at).toLocaleString('en-PK')}</span>
+    </div>`).join('');
+}
+
 function renderRecycleBin(){
   const count=document.getElementById('recycleBinCount');
   const list=document.getElementById('recycleBinList');
