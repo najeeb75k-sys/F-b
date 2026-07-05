@@ -316,10 +316,9 @@
     th,td{border:1px solid #cbd5e1!important;}
   }
   /* Print — Summary page: everything stays in its normal one-after-another order.
-     column-fill:auto makes the first column fill completely top-to-bottom before the
-     rest continues into the second column (like a newspaper), and once both columns
-     of a page are full it automatically continues on the next printed page — no
-     account is ever moved out of its natural place. */
+     column-fill:auto fills the FIRST column completely to the bottom, then continues
+     into the second column, and only moves to a new printed page once both columns
+     of the current page are full — no account is ever moved out of its natural place. */
   @media print{
     .print-summary-cols{column-count:2;column-gap:26px;column-rule:1.5px solid #0f2b4d;column-fill:auto;}
     .print-block{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:5px;}
