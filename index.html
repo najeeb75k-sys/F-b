@@ -286,15 +286,19 @@
   /* Print */
   #printArea{display:none;}
   @media print{
+    /* Force background colors/highlights to actually appear on the printed page
+       (browsers hide them by default unless color-adjust is forced to exact) */
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
-    #printArea{display:block!important;position:absolute;top:0;left:0;width:100%;padding:20px;background:white;}
-    .print-hdr{display:block!important;text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #0f2b4d;}
-    .print-hdr h1{font-size:20px;color:#0f2b4d;margin-bottom:4px;}
-    .print-hdr p{color:#66748c;font-size:12px;}
-    table{width:100%;border-collapse:collapse;font-size:13px;}
-    th{background:#0f2b4d;color:white;padding:8px 10px;text-align:left;}
-    td{padding:7px 10px;border-bottom:1px solid #e2e7f0;}
+    #printArea{display:block!important;position:absolute;top:0;left:0;width:100%;padding:10px;background:white;}
+    .print-hdr{display:block!important;text-align:center;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #0f2b4d;}
+    .print-hdr h1{font-size:16px;color:#0f2b4d;margin-bottom:2px;}
+    .print-hdr p{color:#66748c;font-size:10px;}
+    /* Compact rows so more accounts fit on a single printed page */
+    table{width:100%;border-collapse:collapse;font-size:10.5px;}
+    th{background:#0f2b4d;color:white;padding:4px 8px;text-align:left;}
+    td{padding:2px 8px;border-bottom:1px solid #e2e7f0;line-height:1.25;}
   }
   .print-hdr{display:none;text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--primary);}
   .print-hdr h1{font-size:20px;color:var(--primary);}
@@ -311,6 +315,11 @@
   @media print {
     table{border-collapse:collapse!important;}
     th,td{border:1px solid #cbd5e1!important;}
+  }
+  /* Print — summary group header rows (Amanat / Paid Amanat / Personal / Vehicle / Paid Account)
+     kept compact but clearly highlighted with their color band */
+  @media print{
+    .print-group-row td{padding:3px 10px!important;}
   }
 </style>
 
@@ -3815,12 +3824,12 @@ function printPage(id){
     const row=(label,cr,dr)=>{
       const b=cr-dr;
       const st=PRINT_GROUP_STYLES[label];
-      if(st)return `<tr><td colspan="2" style="background:${st.bg};color:${st.color};font-family:Poppins,sans-serif;font-weight:700;font-size:13px;padding:8px 14px;">${st.icon} ${label} &nbsp;&nbsp; ${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
+      if(st)return `<tr class="print-group-row"><td colspan="2" style="background:${st.bg};color:${st.color};font-family:Poppins,sans-serif;font-weight:700;font-size:11px;padding:4px 12px;">${st.icon} ${label} &nbsp;&nbsp; ${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
       return `<tr><td style="font-weight:700;">${label}</td><td style="font-weight:700;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
     };
     const subRow=(name)=>{
       const b=m.net(name);
-      return `<tr><td style="padding-left:24px;color:#64748b;font-size:12px;">↳ ${name}</td><td style="font-size:12px;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
+      return `<tr><td style="padding-left:20px;color:#64748b;font-size:9.5px;">↳ ${name}</td><td style="font-size:9.5px;text-align:center;">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td></tr>`;
     };
     const amanatRows=(label,names)=>{
       const total=names.reduce((s,n)=>s+m.net(n),0);
