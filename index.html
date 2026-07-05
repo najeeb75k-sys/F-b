@@ -323,9 +323,17 @@
      of the current page are full — no account is ever moved out of its natural place. */
   @media print{
     .print-summary-cols{column-count:2;column-gap:26px;column-rule:1.5px solid #0f2b4d;column-fill:auto;}
-    .print-block{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:5px;}
-    .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;}
-    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;}
+    /* Previously break-inside:avoid was on the whole .print-block (an entire account group —
+       e.g. every Personal Account sub-account bundled as one unit). If that whole group didn't
+       fit in the space left at the bottom of a column, the ENTIRE group jumped to the next
+       column/page, leaving a big blank gap and making it look like accounts were split into
+       separate sections instead of continuing naturally. Now break-inside:avoid is only on each
+       individual line (.print-group-row / .print-row), so a single line never gets cut in half,
+       but the group as a whole flows across the column break and the next account starts right
+       where the previous one ended. */
+    .print-block{margin-bottom:5px;}
+    .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
     .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;}
     .print-summary-total{break-inside:avoid;margin-top:8px;padding:10px 14px;border:2px solid #0f2b4d;border-radius:6px;background:#eef2f8;font-weight:800;font-size:14.5px;text-align:center;line-height:1.7;}
   }
@@ -1460,6 +1468,15 @@ function detectDeviceLabel(){
   else if(/windows/i.test(ua))os='Windows Laptop/PC';
   else if(/macintosh|mac os x/i.test(ua))os='Mac';
   else if(/linux/i.test(ua))os='Linux PC';
+  // Chrome's "Desktop site" toggle on a phone/tablet rewrites the User-Agent to look exactly
+  // like a real desktop (Android/Mobile tokens removed entirely) — so UA alone gets fooled.
+  // A touchscreen with no hover capability is the giveaway that it's actually a handheld
+  // pretending to be a PC, so relabel it instead of reporting a wrong desktop OS.
+  const isTouch=(navigator.maxTouchPoints>0)||('ontouchstart' in window);
+  const noHover=window.matchMedia && window.matchMedia('(hover:none)').matches;
+  if((os==='Linux PC'||os==='Windows Laptop/PC'||os==='Mac') && isTouch && noHover){
+    os='Mobile/Tablet (Desktop-site mode)';
+  }
   let browser='';
   if(/edg\//i.test(ua))browser='Edge';
   else if(/opr\//i.test(ua))browser='Opera';
@@ -1469,10 +1486,24 @@ function detectDeviceLabel(){
   return browser?(os+' — '+browser):os;
 }
 function recordLoginDevice(){
-  cfg.lastLogin={device:detectDeviceLabel(),time:new Date().toISOString()};
+  cfg.lastLogin={device:detectDeviceLabel(),time:new Date().toISOString(),screen:(screen.width+'x'+screen.height)};
   DB.set('cargo_cfg',cfg);
   pushToCloud({cfg});
   renderLastLogin();
+  // Best-effort, fully automatic extra detail — no prompt, no permission popup. On Chromium-based
+  // Android browsers, UA-Client-Hints can reveal the actual phone model (e.g. "SM-A125F"). Not every
+  // browser/OS exposes this (that's a deliberate privacy limit on Google's side, not something this
+  // app can force) — when it isn't available we just keep the OS/browser/screen-size label above.
+  if(navigator.userAgentData && navigator.userAgentData.getHighEntropyValues){
+    navigator.userAgentData.getHighEntropyValues(['model']).then(info=>{
+      if(info && info.model && cfg.lastLogin){
+        cfg.lastLogin.model=info.model;
+        DB.set('cargo_cfg',cfg);
+        pushToCloud({cfg});
+        renderLastLogin();
+      }
+    }).catch(()=>{});
+  }
 }
 function renderLastLogin(){
   const el=document.getElementById('lastLoginInfo');
@@ -1480,8 +1511,11 @@ function renderLastLogin(){
   if(cfg && cfg.lastLogin && cfg.lastLogin.device){
     const d=new Date(cfg.lastLogin.time);
     const dateStr=isNaN(d)?'':d.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    let deviceLine=cfg.lastLogin.device;
+    if(cfg.lastLogin.model)deviceLine+=' ('+cfg.lastLogin.model+')';
     el.style.display='block';
-    el.innerHTML='📱 <b>Last Login Device:</b> '+cfg.lastLogin.device+(dateStr?(' — '+dateStr):'')+
+    el.innerHTML='📱 <b>Last Login Device:</b> '+deviceLine+(dateStr?(' — '+dateStr):'')+
+      (cfg.lastLogin.screen?('<div style="font-size:11px;color:#3949ab;margin-top:2px;">Screen size: '+cfg.lastLogin.screen+'</div>'):'')+
       '<div style="font-size:11px;color:#3949ab;margin-top:4px;">Agar yeh device aap ki nahi hai, to turant Google account ka password change karein.</div>';
   }else{
     el.style.display='none';
