@@ -74,16 +74,25 @@
   .wp-loadbar span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent-deep),var(--accent-light));border-radius:3px;animation:wpLoad 1.4s ease forwards;}
   @keyframes wpLoad{to{width:100%;}}
 
-  /* BISMILLAH — golden stylish Urdu, sits on the left half of the splash and slides away with it */
-  .wp-bismillah{position:absolute;top:14%;left:0;right:0;text-align:center;z-index:3;pointer-events:none;}
-  .wp-bismillah span{font-family:'Noto Nastaliq Urdu',serif;font-size:30px;font-weight:700;line-height:1.9;
+  /* BISMILLAH — golden stylish Urdu, centered on the whole splash screen inside a rounded, white-fade-bordered frame */
+  .wp-bismillah{display:flex;justify-content:center;margin-bottom:20px;pointer-events:none;}
+  .bismillah-frame{display:inline-block;padding:15px 34px;border-radius:60px;
+    border:1.5px solid rgba(255,255,255,.5);
+    background:rgba(255,255,255,.06);
+    box-shadow:0 0 26px rgba(255,255,255,.16),inset 0 0 20px rgba(255,255,255,.06);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+  .wp-bismillah span{font-family:'Noto Nastaliq Urdu',serif;font-size:28px;font-weight:700;line-height:1.9;
     background:linear-gradient(160deg,#fff3cf 0%,#e0a83f 35%,#c17f0e 60%,#9c6608 85%,#e0a83f 100%);
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e0a83f;
     filter:drop-shadow(0 0 14px rgba(224,168,63,.55)) drop-shadow(0 2px 3px rgba(0,0,0,.35));
     letter-spacing:.5px;animation:wpBismillahGlow 2.6s ease-in-out infinite;}
   @keyframes wpBismillahGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(224,168,63,.45)) drop-shadow(0 2px 3px rgba(0,0,0,.35));}
     50%{filter:drop-shadow(0 0 22px rgba(224,168,63,.85)) drop-shadow(0 2px 3px rgba(0,0,0,.35));}}
-  @media(max-width:520px){.wp-bismillah span{font-size:22px;}}
+  @media(max-width:520px){.wp-bismillah span{font-size:20px;}.bismillah-frame{padding:12px 22px;}}
+
+  /* BISMILLAH — small header tag used on Cashbook & Party/Paid Entry pages */
+  .bismillah-tag{display:block;text-align:center;font-family:'Noto Nastaliq Urdu',serif;
+    font-size:17px;font-weight:700;color:#000;margin-bottom:10px;letter-spacing:.3px;line-height:1.8;}
 
   /* APP */
   #mainApp{display:none;min-height:100vh;}
@@ -320,11 +329,10 @@
 
 <!-- WELCOME / SPLASH -->
 <div id="welcomePage">
-  <div class="wp-half wp-left">
-    <div class="wp-bismillah"><span>بِسْمِ اللّٰہِ الرَّحْمٰنِ الرَّحِیْمِ</span></div>
-  </div>
+  <div class="wp-half wp-left"></div>
   <div class="wp-half wp-right"></div>
   <div class="wp-content">
+    <div class="wp-bismillah"><div class="bismillah-frame"><span>بِسْمِ اللّٰہِ الرَّحْمٰنِ الرَّحِیْمِ</span></div></div>
     <span class="wp-truck">🚛</span>
     <h1>Farman &amp; Brothers<br>Cargo Service</h1>
     <p>Welcome</p>
@@ -459,6 +467,7 @@
       <!-- CASHBOOK -->
       <div class="page" id="page-autoEntry">
         <div class="card">
+          <div class="bismillah-tag">بِسْمِ اللّٰہِ الرَّحْمٰنِ الرَّحِیْمِ</div>
           <div class="card-header">
             <span class="card-title" data-i18n="cashbookNewEntries">📒 Cashbook</span>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
@@ -512,6 +521,7 @@
       <!-- TP ENTRY -->
       <div class="page" id="page-tpEntry">
         <div class="card">
+          <div class="bismillah-tag">بِسْمِ اللّٰہِ الرَّحْمٰنِ الرَّحِیْمِ</div>
           <div class="card-header">
             <span class="card-title">⚖️ Party & Paid Entry</span>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
