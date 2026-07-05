@@ -1798,7 +1798,8 @@ function saveEntry(){
   // Account must already exist (created via Accounts List) — no more silently auto-creating a
   // new account just because someone typed a new name into Cashbook.
   const accExists=accounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
-  if(!accExists){toast(`"${name}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');return;}
+  const paidAccExists=paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
+  if(!accExists && !paidAccExists){toast(`"${name}" account maujood nahi hai! Pehle "Accounts List" ya "Paid Accounts" mein ye account banayein.`,'error');return;}
   const id=document.getElementById('editEntryId').value;
   if(id){const idx=entries.findIndex(e=>e.id===id);entries[idx]={id,date,name,type,amount,ref,desc};toast('Entry update ho gayi! ✅','success');}
   else{entries.push({id:uid(),date,name,type,amount,ref,desc});toast('Entry save ho gayi! ✅','success');}
@@ -2338,8 +2339,12 @@ function cbFieldChange(el){
     const val=value.trim();
     if(val){
       const exists=accounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
-      if(!exists){
-        toast(`"${val}" account maujood nahi hai! Pehle "Accounts List" mein ye account banayein.`,'error');
+      // Cashbook row name can also reference a "Paid Account" (from the separate Paid Accounts list) —
+      // previously only the general Accounts List was checked here, so typing a valid Paid Account name
+      // was wrongly blocked as "doesn't exist".
+      const existsInPaid=paidAccounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
+      if(!exists && !existsInPaid){
+        toast(`"${val}" account maujood nahi hai! Pehle "Accounts List" ya "Paid Accounts" mein ye account banayein.`,'error');
         el.value='';
         el.focus();
         return;
