@@ -1458,6 +1458,24 @@ function attachCloudSync(){
 // change less often, a stale local copy would silently overwrite the other device's fresher data.
 // Pending fields accumulate across the debounce window so several quick saves (e.g. save() then
 // savePaid()) still go out together in one write.
+//
+// SAFETY NET AGAINST DATA LOSS: on top of only sending changed fields, every push now first
+// re-reads the CURRENT cloud copy and merges it in — any record (matched by its `id`) that exists
+// in the cloud but not in this device's local copy gets ADDED, never dropped. This is what stops
+// the classic multi-device bug: Device A adds a Cashbook/Opening-Balance entry, then later Device B
+// (which had an older, stale local copy open) saves something small of its own and — without this
+// merge — would silently overwrite the whole array back to its old state, wiping A's entry. Now B's
+// stale push picks up A's entry from the cloud first and keeps it. Deliberate deletions still work
+// correctly because deleted records move into recycleBin — any id present in the (merged) recycleBin
+// is excluded from every other list, so a deletion always wins over a stale "still has it" copy.
+function mergeArrById(localArr,remoteArr,excludeIds){
+  const local=Array.isArray(localArr)?localArr:[];
+  const remote=Array.isArray(remoteArr)?remoteArr:[];
+  const localIds=new Set(local.map(x=>x&&x.id));
+  let merged=local.concat(remote.filter(r=>r && r.id!=null && !localIds.has(r.id)));
+  if(excludeIds && excludeIds.size)merged=merged.filter(x=>!(x&&excludeIds.has(x.id)));
+  return merged;
+}
 let fbPushTimer=null, fbPendingFields=null;
 function pushToCloud(fields){
   if(!fbUser||!fbDb)return;
@@ -1466,13 +1484,43 @@ function pushToCloud(fields){
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
-    // Record who made this change: prepend to the activity log (capped at 30) so it's visible
-    // to every device this account signs in on — this is how you find out "which mobile changed it".
-    activityLog=[{device:deviceLabel||'Unknown Device',at:new Date().toISOString()},...activityLog].slice(0,30);
-    DB.set('cargo_activity_log',activityLog);
-    const payload={...fbPendingFields, activityLog, lastEditedBy:deviceLabel||'Unknown Device', updatedAt:new Date().toISOString()};
+    const pending=fbPendingFields;
     fbPendingFields=null;
-    fbDb.collection('cargo_data').doc(fbUser.uid).set(payload,{merge:true}).then(()=>{
+    const docRef=fbDb.collection('cargo_data').doc(fbUser.uid);
+    docRef.get().then(remoteSnap=>{
+      const remote=remoteSnap.exists?(remoteSnap.data()||{}):{};
+      // Union the recycle bins first so we know every id that either side has already deleted.
+      const mergedRecycleBin=mergeArrById(pending.recycleBin!==undefined?pending.recycleBin:recycleBin, remote.recycleBin);
+      const deletedIds=new Set(mergedRecycleBin.map(x=>x&&x.id));
+      const payload={...pending};
+      ['entries','accounts','paidEntries','tpRows','obRows'].forEach(key=>{
+        if(payload[key]!==undefined)payload[key]=mergeArrById(payload[key],remote[key],deletedIds);
+      });
+      if(payload.recycleBin!==undefined)payload.recycleBin=mergedRecycleBin;
+      // Reflect the merge back into this device's own in-memory/local copy too, so nothing gets
+      // lost if the user keeps editing before the next cloud update arrives.
+      if(payload.entries!==undefined)entries=payload.entries;
+      if(payload.accounts!==undefined)accounts=payload.accounts;
+      if(payload.paidEntries!==undefined)paidEntries=payload.paidEntries;
+      if(payload.tpRows!==undefined)tpRows=payload.tpRows;
+      if(payload.obRows!==undefined)obRows=payload.obRows;
+      if(payload.recycleBin!==undefined)recycleBin=payload.recycleBin;
+      DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_paid_entries',paidEntries);
+      DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);DB.set('cargo_recycle',recycleBin);
+      refreshDash();
+      if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
+      if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
+      if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
+      if(document.getElementById('page-backup')?.classList.contains('active')){renderRecycleBin();renderActivityLog();}
+      // Record who made this change: prepend to the activity log (capped at 30) so it's visible
+      // to every device this account signs in on — this is how you find out "which mobile changed it".
+      activityLog=[{device:deviceLabel||'Unknown Device',at:new Date().toISOString()},...activityLog].slice(0,30);
+      DB.set('cargo_activity_log',activityLog);
+      payload.activityLog=activityLog;
+      payload.lastEditedBy=deviceLabel||'Unknown Device';
+      payload.updatedAt=new Date().toISOString();
+      return docRef.set(payload,{merge:true});
+    }).then(()=>{
       setSyncBadge('connected');
     }).catch(err=>{
       console.error('Push to cloud failed',err);
