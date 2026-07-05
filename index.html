@@ -315,14 +315,13 @@
     table{border-collapse:collapse!important;}
     th,td{border:1px solid #cbd5e1!important;}
   }
-  /* Print — Summary page: two columns side by side with a divider line down the middle,
-     so more accounts fit on one page without shrinking the text too small.
-     Uses a JS-computed flex split (not CSS column-count) for reliable rendering across
-     all browsers and mobile print/PDF engines. */
+  /* Print — Summary page: everything stays in its normal one-after-another order.
+     column-fill:auto makes the first column fill completely top-to-bottom before the
+     rest continues into the second column (like a newspaper), and once both columns
+     of a page are full it automatically continues on the next printed page — no
+     account is ever moved out of its natural place. */
   @media print{
-    .print-summary-flex{display:flex;gap:26px;align-items:flex-start;}
-    .print-col{flex:1;min-width:0;}
-    .print-col-right{border-left:1.5px solid #0f2b4d;padding-left:26px;}
+    .print-summary-cols{column-count:2;column-gap:26px;column-rule:1.5px solid #0f2b4d;column-fill:auto;}
     .print-block{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:6px;}
     .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;}
     .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:3px 4px;border-bottom:1px solid #e2e7f0;}
@@ -3839,41 +3838,34 @@ function printPage(id){
       const b=m.net(name);
       return `<div class="print-row print-sub-row"><span>↳ ${name}</span><span>${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span></div>`;
     };
-    let blocks=[];
-    m.top.forEach(t=>{blocks.push({html:`<div class="print-block">${row(t.name,t.cr,t.dr)}</div>`,weight:1});});
-    const pushBlock=(html,rows)=>blocks.push({html:`<div class="print-block">${html}</div>`,weight:rows+1});
-    const buildAmanat=(label,names)=>{
+    let body='';
+    m.top.forEach(t=>{body+=`<div class="print-block">${row(t.name,t.cr,t.dr)}</div>`;});
+    const amanatBlock=(label,names)=>{
       const total=names.reduce((s,n)=>s+m.net(n),0);
       let h=row(label,total,0);
       names.forEach(n=>{h+=subRow(n);});
-      pushBlock(h,names.length);
+      body+=`<div class="print-block">${h}</div>`;
     };
-    const buildDebitGroup=(label,names)=>{
+    const debitGroupBlock=(label,names)=>{
       const debitNames=m.debitOf(names);
       const total=debitNames.reduce((s,n)=>s-m.net(n),0);
       let h=row(label,0,total);
       debitNames.forEach(n=>{h+=subRow(n);});
-      pushBlock(h,debitNames.length);
+      body+=`<div class="print-block">${h}</div>`;
     };
-    buildAmanat('Amanat',m.amanatNames);
-    buildAmanat('Paid Amanat',m.paidAmanatNames);
-    buildDebitGroup('Personal Account',m.groups.PA);
-    buildDebitGroup('Party Account',m.groups.PARTY);
-    buildDebitGroup('Vehicle Account',m.groups.V);
-    buildDebitGroup('Paid Account',m.groups.P);
-    // Split blocks into two columns by weight (row count) rather than relying on CSS
-    // column-count, since many print engines (mobile browsers, print-to-PDF) don't
-    // reliably reflow CSS columns — this guarantees a real left/right split every time.
-    const totalWeight=blocks.reduce((s,b)=>s+b.weight,0);
-    let left='',right='',acc=0;
-    blocks.forEach(b=>{
-      if(acc<totalWeight/2){left+=b.html;acc+=b.weight;}
-      else{right+=b.html;}
-    });
-    const body=`<div class="print-summary-flex"><div class="print-col">${left}</div><div class="print-col print-col-right">${right||''}</div></div>`;
+    amanatBlock('Amanat',m.amanatNames);
+    amanatBlock('Paid Amanat',m.paidAmanatNames);
+    debitGroupBlock('Personal Account',m.groups.PA);
+    debitGroupBlock('Party Account',m.groups.PARTY);
+    debitGroupBlock('Vehicle Account',m.groups.V);
+    debitGroupBlock('Paid Account',m.groups.P);
+    // Natural sequential order: everything one after another, exactly like the on-screen list.
+    // CSS multi-column (column-fill:auto) fills the first column completely top-to-bottom,
+    // then continues into the second column, then automatically moves to the next printed
+    // page — no manual re-ordering, no account moved out of place.
     document.getElementById('printArea').innerHTML=`
       <div class="print-hdr"><h1>${cfg.company}</h1><p>Summary Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
-      ${blocks.length?body:'<div class="print-row">No data</div>'}
+      <div class="print-summary-cols">${body||'<div class="print-row">No data</div>'}</div>
       <div class="print-summary-total">TOTAL DEBIT: ${fmt(tdr)} | TOTAL CREDIT: ${fmt(tcr)} &nbsp;&nbsp; Balance: ${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</div>`;
     window.print();
   }
