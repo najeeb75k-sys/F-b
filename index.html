@@ -332,9 +332,14 @@
        but the group as a whole flows across the column break and the next account starts right
        where the previous one ended. */
     .print-block{margin-bottom:5px;}
-    .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;}
+    /* Name-on-top, divider line, Balance-below (stacked instead of side-by-side) — for both the
+       highlighted group bars (Amanat, Personal Account, etc.) and every normal/sub-account row. */
+    .print-group-row{display:flex;flex-direction:column;gap:3px;font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:6px 10px 7px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row{display:flex;flex-direction:column;gap:3px;font-size:12px;padding:4px 6px 5px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .pr-name{line-height:1.3;}
+    .pr-divider{border-top:1px dashed currentColor;opacity:.45;margin:1px 0;}
+    .pr-balance{text-align:right;font-weight:800;}
+    .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;border-bottom:1px dotted #e2e7f0;}
     .print-summary-total{break-inside:avoid;margin-top:8px;padding:10px 14px;border:2px solid #0f2b4d;border-radius:6px;background:#eef2f8;font-weight:800;font-size:14.5px;text-align:center;line-height:1.7;}
   }
 </style>
@@ -3929,12 +3934,24 @@ function printPage(id){
     const row=(label,cr,dr)=>{
       const b=cr-dr;
       const st=PRINT_GROUP_STYLES[label];
-      if(st)return `<div class="print-group-row" style="background:${st.bg};color:${st.color};">${st.icon} ${label} &nbsp;&nbsp; ${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</div>`;
-      return `<div class="print-row" style="font-weight:700;"><span>${label}</span><span>${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span></div>`;
+      if(st)return `<div class="print-group-row" style="background:${st.bg};color:${st.color};">
+        <div class="pr-name">${st.icon} ${label}</div>
+        <div class="pr-divider"></div>
+        <div class="pr-balance">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</div>
+      </div>`;
+      return `<div class="print-row" style="font-weight:700;">
+        <div class="pr-name">${label}</div>
+        <div class="pr-divider"></div>
+        <div class="pr-balance">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</div>
+      </div>`;
     };
     const subRow=(name)=>{
       const b=m.net(name);
-      return `<div class="print-row print-sub-row"><span>↳ ${name}</span><span>${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span></div>`;
+      return `<div class="print-row print-sub-row">
+        <div class="pr-name">↳ ${name}</div>
+        <div class="pr-divider"></div>
+        <div class="pr-balance">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</div>
+      </div>`;
     };
     let body='';
     m.top.forEach(t=>{body+=`<div class="print-block">${row(t.name,t.cr,t.dr)}</div>`;});
