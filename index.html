@@ -2476,6 +2476,22 @@ function cbFieldChange(el){
   if(field==='date'){
     if(!value){return;} // ignore clearing date on blank row
     cbUpsertField(pid,null,'date',value);
+  }else if(field==='name'){
+    // When account name changes, auto-generate description: "Transfer to X" for debit, "Receive from Y" for credit
+    if(side==='dr' && value.trim()){
+      cbUpsertField(pid,'dr','name',value);
+      cbUpsertField(pid,'dr','desc','Transfer to '+value.trim());
+      const descInput=cbFindInput(pid,'dr','desc');
+      if(descInput)descInput.value='Transfer to '+value.trim();
+    }else if(side==='cr' && value.trim()){
+      cbUpsertField(pid,'cr','name',value);
+      cbUpsertField(pid,'cr','desc','Receive from '+value.trim());
+      const descInput=cbFindInput(pid,'cr','desc');
+      if(descInput)descInput.value='Receive from '+value.trim();
+    }else{
+      cbUpsertField(pid,side,'name',value);
+    }
+    cbSyncPaidLink(pid);
   }else{
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     cbUpsertField(pid,side,field,value);
@@ -3045,14 +3061,19 @@ function tpFieldChange(el){
   }else if(['debit','credit','profit','tpAmount'].includes(field)){
     if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     tpUpsertField(rid,field,parseFloat(value)||0);
-    // Debit (Party) amount → auto-mirror into this row's Credit (Paid) amount, same idea as
-    // Cashbook: only when Credit hasn't already been manually filled in with its own value.
-    if(field==='debit' && value){
+    // When credit, profit, or tpAmount changes, auto-update debit to be their sum
+    if((field==='credit' || field==='profit' || field==='tpAmount') && value){
       const row2=tpRows.find(r=>r.id===rid);
-      if(row2 && !row2.credit){
-        tpUpsertField(rid,'credit',parseFloat(value)||0);
-        const crInput=tpFindInput(rid,'credit');
-        if(crInput)crInput.value=value;
+      if(row2){
+        const cr=parseFloat(row2.credit)||0;
+        const pf=parseFloat(row2.profit)||0;
+        const tp=parseFloat(row2.tpAmount)||0;
+        const newDebit=cr+pf+tp;
+        if(newDebit>0){
+          tpUpsertField(rid,'debit',newDebit);
+          const dbInput=tpFindInput(rid,'debit');
+          if(dbInput)dbInput.value=newDebit.toString();
+        }
       }
     }
   }else{
@@ -3241,9 +3262,15 @@ function tpDragEnd(){
 
 function tpDeleteRow(rid){
   if(!confirm('Yeh poori row delete karna chahte hain? (Iski 4 ledger entries bhi Recycle Bin mein jayengi)'))return;
+  const tpRow=tpRows.find(r=>r.id===rid);
   const linked=entries.filter(e=>e.tpRowId===rid);
   linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  if(linked.length){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
+  // Also save the original TP row so it can be fully restored (including all the party/paid/profit/tp data)
+  if(tpRow){
+    const tpRowCopy={...tpRow,deletedAt:new Date().toISOString(),deletedFrom:'tpRow'};
+    recycleBin.push(tpRowCopy);
+  }
+  if(linked.length || tpRow){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   tpRemoveGeneratedEntries(rid);
   tpRows=tpRows.filter(r=>r.id!==rid);
   saveTp();save();renderTpEntries();refreshDash();
@@ -3602,9 +3629,15 @@ function obKeyHandler(ev,el,isLastRow){
 
 function obDeleteRow(rid){
   if(!confirm('Yeh poori row delete karna chahte hain? (Iski ledger entries bhi Recycle Bin mein jayengi)'))return;
+  const obRow=obRows.find(r=>r.id===rid);
   const linked=entries.filter(e=>e.obRowId===rid);
   linked.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  if(linked.length){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
+  // Also save the original OB row so it can be fully restored (including all the debitAcc/debitAmt/creditAcc/creditAmt data)
+  if(obRow){
+    const obRowCopy={...obRow,deletedAt:new Date().toISOString(),deletedFrom:'obRow'};
+    recycleBin.push(obRowCopy);
+  }
+  if(linked.length || obRow){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   obRemoveGeneratedEntries(rid);
   obRows=obRows.filter(r=>r.id!==rid);
   saveOb();save();renderObEntries();refreshDash();
@@ -3684,6 +3717,52 @@ function restoreEntry(id){
   const e=recycleBin[idx];
   const deletedFrom=e.deletedFrom;
   delete e.deletedAt;delete e.deletedFrom;
+
+  // Restore a deleted TP (Party & Paid Entry) row and all its 4 generated ledger entries
+  if(deletedFrom==='tpRow'){
+    tpRows.push(e);
+    // Also restore all the linked ledger entries (with this row's ID)
+    const linkedIds=recycleBin.filter(x=>x.tpRowId===e.id && x.tpRole).map(x=>x.id);
+    linkedIds.forEach(linkId=>{
+      const linkIdx=recycleBin.findIndex(x=>x.id===linkId);
+      if(linkIdx>-1){
+        const linkE=recycleBin[linkIdx];
+        delete linkE.deletedAt;delete linkE.deletedFrom;
+        entries.push(linkE);
+        recycleBin.splice(linkIdx,1);
+        idx===linkIdx && idx--; // adjust our removal index if needed
+      }
+    });
+    // Remove the TP row itself from recycleBin
+    recycleBin.splice(idx,1);
+    saveTp();save();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin,tpRows,entries});
+    renderTpEntries();refreshDash();renderRecycleBin();
+    toast('TP Row restore ho gayi! ✅','success');
+    return;
+  }
+
+  // Restore a deleted Opening Balance row and all its 2 generated ledger entries
+  if(deletedFrom==='obRow'){
+    obRows.push(e);
+    // Also restore all the linked ledger entries (with this row's ID)
+    const linkedIds=recycleBin.filter(x=>x.obRowId===e.id).map(x=>x.id);
+    linkedIds.forEach(linkId=>{
+      const linkIdx=recycleBin.findIndex(x=>x.id===linkId);
+      if(linkIdx>-1){
+        const linkE=recycleBin[linkIdx];
+        delete linkE.deletedAt;delete linkE.deletedFrom;
+        entries.push(linkE);
+        recycleBin.splice(linkIdx,1);
+        idx===linkIdx && idx--; // adjust our removal index if needed
+      }
+    });
+    // Remove the OB row itself from recycleBin
+    recycleBin.splice(idx,1);
+    saveOb();save();DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin,obRows,entries});
+    renderObEntries();refreshDash();renderRecycleBin();
+    toast('Opening Balance Row restore ho gayi! ✅','success');
+    return;
+  }
 
   // Deleted account restores straight back into the accounts list (not into entries).
   if(deletedFrom==='account'){
