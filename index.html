@@ -509,7 +509,7 @@
             </div>
           </div>
           <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
-            ✏️ Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
+            ✏️ Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> ek hi box hai — jo bhi likhenge, () mein band hokar Debit aur Credit dono taraf save hoga. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
           </div>
           <div class="tbl-wrap">
             <table style="table-layout:fixed;min-width:920px;">
@@ -518,12 +518,11 @@
                 <col style="width:118px;">
                 <col style="width:150px;">
                 <col style="width:110px;">
+                <col style="width:90px;">
+                <col style="width:90px;">
                 <col style="width:150px;">
-                <col style="width:90px;">
-                <col style="width:90px;">
                 <col style="width:150px;">
                 <col style="width:110px;">
-                <col style="width:150px;">
                 <col style="width:90px;">
                 <col style="width:40px;">
               </colgroup>
@@ -532,12 +531,11 @@
                 <th data-i18n="date">Date</th>
                 <th style="color:#fca5a5;">Debit Account</th>
                 <th style="color:#fca5a5;">Debit Amt</th>
-                <th data-i18n="description">Description</th>
                 <th data-i18n="refNo">Ref No</th>
                 <th style="color:#e8a020;">Paid No</th>
+                <th data-i18n="description">Description</th>
                 <th style="color:#86efac;">Credit Account</th>
                 <th style="color:#86efac;">Credit Amt</th>
-                <th data-i18n="description">Description</th>
                 <th data-i18n="refNo">Ref No</th>
                 <th class="no-print"></th>
               </tr></thead>
@@ -2396,8 +2394,9 @@ function renderCashbook(){
   tbody.innerHTML=rows.map((r,i)=>{
     const pid=r.pairId || r.tempPairId;
     const dateVal=r.date||'';
-    const drName=r.dr?.name||'', drAmt=r.dr?.amount||'', drDesc=r.dr?.desc||'', drRef=r.dr?.ref||'';
-    const crName=r.cr?.name||'', crAmt=r.cr?.amount||'', crDesc=r.cr?.desc||'', crRef=r.cr?.ref||'';
+    const drName=r.dr?.name||'', drAmt=r.dr?.amount||'', drRef=r.dr?.ref||'';
+    const crName=r.cr?.name||'', crAmt=r.cr?.amount||'', crRef=r.cr?.ref||'';
+    const sharedDesc=cbSharedDescDisplay(r.dr?.desc,r.cr?.desc);
     const paidNo=r.dr?.paidNo||r.cr?.paidNo||r.paidNo||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
     const isLast=(i===rows.length-1);
     return `<tr data-pid="${pid}">
@@ -2408,12 +2407,11 @@ function renderCashbook(){
       </td>
       <td class="cbcell cb-debit"><input type="text" placeholder="Account" value="${drName}" data-field="name" data-side="dr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${drDesc}" data-field="desc" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(99,102,241,0.06);"><input type="text" placeholder="Description (dono taraf jayega)" value="${sharedDesc}" data-field="desc" data-side="" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur" style="color:#4f46e5;font-weight:600;" title="Yahan jo likhenge, () mein band hoke Debit aur Credit dono ki description mein save hoga"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-credit"><input type="text" placeholder="Account" value="${crName}" data-field="name" data-side="cr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','cr')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${crAmt||''}" data-field="amount" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','cr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${crDesc}" data-field="desc" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','cr')" title="Drag to copy down"></span></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','cr')" title="Drag to copy down"></span></td>
       <td class="no-print" style="text-align:center;">${r.pairId?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="cbDeleteRow('${pid}')">🗑️</button>`:''}</td>
     </tr>`;
@@ -2427,6 +2425,25 @@ function renderCashbook(){
     : ('Debit: '+fmt(tdr)+' | Credit: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr)));
 }
 
+// The single shared Description box shows plain text for editing (no visible parentheses) even
+// though what's actually stored on both dr.desc/cr.desc is the "(...)" wrapped version — this
+// unwraps it back to plain text for display. Falls back to whichever side actually has text,
+// so descriptions written before this change (which could differ between debit/credit) still show
+// up here instead of disappearing.
+function cbSharedDescDisplay(drDesc,crDesc){
+  let raw=(drDesc&&drDesc.trim())?drDesc.trim():(crDesc||'').trim();
+  const m=raw.match(/^\((.*)\)$/s);
+  return m?m[1]:raw;
+}
+// Writes one description into BOTH sides of a cashbook row, wrapped in parentheses — replaces the
+// old behavior where each side had its own separate (and on top of that, auto-generated "Transfer
+// to X" / "Receive from Y") description.
+function cbUpsertSharedDesc(pairId,rawValue){
+  const val=(rawValue||'').trim();
+  const wrapped=val?`(${val})`:'';
+  cbUpsertField(pairId,'dr','desc',wrapped);
+  cbUpsertField(pairId,'cr','desc',wrapped);
+}
 function cbFieldChange(el){
   const pid=el.getAttribute('data-pid');
   const side=el.getAttribute('data-side');
@@ -2476,21 +2493,12 @@ function cbFieldChange(el){
   if(field==='date'){
     if(!value){return;} // ignore clearing date on blank row
     cbUpsertField(pid,null,'date',value);
+  }else if(field==='desc'){
+    // Shared Description box (side is always '' for this field) — one value written to both
+    // Debit and Credit descriptions, wrapped in parentheses.
+    cbUpsertSharedDesc(pid,value);
   }else if(field==='name'){
-    // When account name changes, auto-generate description: "Transfer to X" for debit, "Receive from Y" for credit
-    if(side==='dr' && value.trim()){
-      cbUpsertField(pid,'dr','name',value);
-      cbUpsertField(pid,'dr','desc','Transfer to '+value.trim());
-      const descInput=cbFindInput(pid,'dr','desc');
-      if(descInput)descInput.value='Transfer to '+value.trim();
-    }else if(side==='cr' && value.trim()){
-      cbUpsertField(pid,'cr','name',value);
-      cbUpsertField(pid,'cr','desc','Receive from '+value.trim());
-      const descInput=cbFindInput(pid,'cr','desc');
-      if(descInput)descInput.value='Receive from '+value.trim();
-    }else{
-      cbUpsertField(pid,side,'name',value);
-    }
+    cbUpsertField(pid,side,'name',value);
     cbSyncPaidLink(pid);
   }else{
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
@@ -2576,9 +2584,10 @@ function cbSyncPaidLink(pid){
 // Field order across one cashbook row, left to right — used for arrow-key/Enter navigation.
 const CB_FIELD_ORDER=[
   {side:'',field:'date'},
-  {side:'dr',field:'name'},{side:'dr',field:'amount'},{side:'dr',field:'desc'},{side:'dr',field:'ref'},
+  {side:'dr',field:'name'},{side:'dr',field:'amount'},{side:'dr',field:'ref'},
   {side:'',field:'paidNo'},
-  {side:'cr',field:'name'},{side:'cr',field:'amount'},{side:'cr',field:'desc'},{side:'cr',field:'ref'}
+  {side:'',field:'desc'},
+  {side:'cr',field:'name'},{side:'cr',field:'amount'},{side:'cr',field:'ref'}
 ];
 function cbFindInput(pid,side,field){
   return document.querySelector(`#cashbookBody input[data-pid="${pid}"][data-side="${side}"][data-field="${field}"]`);
@@ -3671,7 +3680,8 @@ function renderRecycleBin(){
   const cutoff=Date.now()-(30*24*60*60*1000);
   recycleBin=recycleBin.filter(e=>new Date(e.deletedAt).getTime()>cutoff);
   DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
-  count.textContent=recycleBin.length+' deleted entries (30 din tak recover kar sakte hain)';
+  const visibleCount=recycleBin.filter(e=>!(e.tpRowId||e.obRowId)).length;
+  count.textContent=visibleCount+' deleted entries (30 din tak recover kar sakte hain)';
   if(!recycleBin.length){
     list.innerHTML='<div style="text-align:center;padding:20px;color:#94a3b8;font-size:13px;">♻️ Recycle bin khali hai</div>';
     return;
@@ -3700,6 +3710,37 @@ function renderRecycleBin(){
       <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
     </div>`;
     }
+    // A deleted Party & Paid Entry row. Previously this fell through to the generic ledger-entry
+    // branch below, which reads e.type — but a tpRow object has no `type` field, so it threw and
+    // silently broke rendering for the WHOLE list (one bad item aborts the entire .map()), which is
+    // why deletes appeared to vanish instead of showing up here.
+    if(e.deletedFrom==='tpRow'){
+      return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">⚖️ ${e.party||'-'} → ${e.paid||'-'} <span style="font-size:10px;color:#94a3b8;font-weight:500;">(Party & Paid Entry)</span></div>
+        <div style="font-size:11px;color:var(--text-light);">${e.date||'-'} | Debit: ${fmt(e.debit||0)} | Credit: ${fmt(e.credit||0)} | Profit: ${fmt(e.profit||0)}</div>
+        <div style="font-size:10px;color:#ef4444;">Deleted: ${new Date(e.deletedAt).toLocaleDateString('en-PK')}</div>
+      </div>
+      <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
+    </div>`;
+    }
+    // A deleted Opening Balance row — same fix as above, obRow has no `type` field either.
+    if(e.deletedFrom==='obRow'){
+      return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:600;font-size:13px;">🏁 ${e.debitAcc||'-'} / ${e.creditAcc||'-'} <span style="font-size:10px;color:#94a3b8;font-weight:500;">(Opening Balance)</span></div>
+        <div style="font-size:11px;color:var(--text-light);">${e.date||'-'} | Debit: ${fmt(e.debitAmt||0)} | Credit: ${fmt(e.creditAmt||0)}</div>
+        <div style="font-size:10px;color:#ef4444;">Deleted: ${new Date(e.deletedAt).toLocaleDateString('en-PK')}</div>
+      </div>
+      <button class="btn btn-success btn-sm" onclick="restoreEntry('${e.id}')">↩️ Restore</button>
+    </div>`;
+    }
+    // A TP row's or OB row's individual generated ledger entries also sit in recycleBin (needed so
+    // restoreEntry can re-link them), but they restore automatically together with their parent row
+    // above — listing them again here separately would just be 4 confusing duplicate lines per delete.
+    if(e.tpRowId || e.obRowId){return '';}
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #fecaca;background:#fff5f5;gap:8px;flex-wrap:wrap;">
       <div>
