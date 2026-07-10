@@ -2403,18 +2403,18 @@ function renderCashbook(){
     return `<tr data-pid="${pid}">
       <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
       <td class="cbcell cb-date-cell" data-pid="${pid}">
-        <input type="date" class="cbcell-input" value="${dateVal}" data-field="date" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})">
+        <input type="date" class="cbcell-input" value="${dateVal}" data-field="date" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)">
         <span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','date','')" title="Drag to copy down"></span>
       </td>
-      <td class="cbcell cb-debit"><input type="text" placeholder="Account" value="${drName}" data-field="name" data-side="dr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${drDesc}" data-field="desc" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-credit"><input type="text" placeholder="Account" value="${crName}" data-field="name" data-side="cr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','cr')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${crAmt||''}" data-field="amount" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','cr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Description" value="${crDesc}" data-field="desc" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','cr')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','cr')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-debit"><input type="text" placeholder="Account" value="${drName}" data-field="name" data-side="dr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','dr')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','dr')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Description" value="${drDesc}" data-field="desc" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','dr')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-credit"><input type="text" placeholder="Account" value="${crName}" data-field="name" data-side="cr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','cr')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${crAmt||''}" data-field="amount" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','cr')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Description" value="${crDesc}" data-field="desc" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','cr')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','cr')" title="Drag to copy down"></span></td>
       <td class="no-print" style="text-align:center;">${r.pairId?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="cbDeleteRow('${pid}')">🗑️</button>`:''}</td>
     </tr>`;
   }).join('') + `<datalist id="cbAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="cbPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
@@ -2480,6 +2480,17 @@ function cbFieldChange(el){
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     cbUpsertField(pid,side,field,value);
     cbSyncPaidLink(pid);
+    // Debit amount → auto-mirror into this row's Credit amount (only if Credit hasn't been
+    // manually typed already), since a cashbook row is almost always a matched debit=credit pair.
+    if(side==='dr' && field==='amount' && value){
+      const crEntry=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
+      if(!crEntry || !crEntry.amount){
+        cbUpsertField(pid,'cr','amount',value);
+        cbSyncPaidLink(pid);
+        const crInput=cbFindInput(pid,'cr','amount');
+        if(crInput)crInput.value=value;
+      }
+    }
   }
 
   const q=(document.getElementById('cbSearch')?.value||'').trim();
@@ -2676,6 +2687,45 @@ function cbKeyHandler(ev,el,isLastRow){
       }
     }
   }
+}
+
+// ----- Paste a block of cells (copied from Excel/Sheets/another row) across rows & columns -----
+// Tab-separated columns, newline-separated rows — standard spreadsheet clipboard format.
+function cbPasteHandler(ev,el){
+  const text=(ev.clipboardData||window.clipboardData).getData('text');
+  if(!text||(!text.includes('\t')&&!text.includes('\n')))return; // single value — let the browser paste normally
+  ev.preventDefault();
+  const grid=text.replace(/\r/g,'').split('\n').filter((r,i,arr)=>!(i===arr.length-1&&r===''));
+  if(!grid.length)return;
+  const side=el.getAttribute('data-side')||'';
+  const field=el.getAttribute('data-field');
+  const startCol=CB_FIELD_ORDER.findIndex(d=>d.side===side&&d.field===field);
+  if(startCol<0)return;
+  const startPid=el.getAttribute('data-pid');
+  let pids=cbGetRowPids();
+  const startRow=pids.indexOf(startPid);
+  if(startRow<0)return;
+  const rowsNeeded=startRow+grid.length;
+  if(rowsNeeded>pids.length){
+    cbDesiredBlankCount=Math.max(cbDesiredBlankCount,rowsNeeded);
+    renderCashbook();
+    pids=cbGetRowPids();
+  }
+  grid.forEach((rowText,ri)=>{
+    const targetPid=pids[startRow+ri];
+    if(!targetPid)return;
+    const cols=rowText.split('\t');
+    cols.forEach((val,ci)=>{
+      const colDef=CB_FIELD_ORDER[startCol+ci];
+      if(!colDef)return;
+      val=val.trim();
+      if(val==='')return;
+      const inp=cbFindInput(targetPid,colDef.side,colDef.field);
+      if(inp){inp.value=val;cbFieldChange(inp);}
+    });
+  });
+  toast('Data paste ho gaya! ✅','success');
+  setTimeout(()=>renderCashbook(),50);
 }
 
 // ----- Drag-to-fill any column down (Excel-style fill handle) -----
@@ -2936,17 +2986,17 @@ function renderTpEntries(){
     const isReal=tpRows.some(x=>x.id===r.id);
     return `<tr data-rid="${r.id}">
       <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
-      <td class="cbcell cb-date-cell"><input type="date" class="cbcell-input" value="${r.date||''}" data-field="date" data-rid="${r.id}" onchange="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','date')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-debit"><input type="text" placeholder="Party Account" value="${r.party||''}" data-field="party" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','party')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${r.debit||''}" data-field="debit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','debit')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Ref No" value="${r.refNo||''}" data-field="refNo" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','refNo')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-credit"><input type="text" placeholder="Paid Account" value="${r.paid||''}" data-field="paid" data-rid="${r.id}" list="tpPaidAccNameList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','paid')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${r.credit||''}" data-field="credit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','credit')" title="Drag to copy down"></span></td>
-      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${r.paidNo||''}" data-field="paidNo" data-rid="${r.id}" list="tpPaidNoList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','paidNo')" title="Drag to copy down"></span></td>
-      <td class="cbcell"><input type="text" placeholder="Weight Station" value="${r.weightStation||''}" data-field="weightStation" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','weightStation')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-profit"><input type="number" placeholder="0.00" value="${r.profit||''}" data-field="profit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','profit')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-tp"><input type="text" placeholder="TP Account" value="${r.tpAcc||''}" data-field="tpAcc" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAcc')" title="Drag to copy down"></span></td>
-      <td class="cbcell cb-tp"><input type="number" placeholder="0.00" value="${r.tpAmount||''}" data-field="tpAmount" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAmount')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-date-cell"><input type="date" class="cbcell-input" value="${r.date||''}" data-field="date" data-rid="${r.id}" onchange="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','date')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-debit"><input type="text" placeholder="Party Account" value="${r.party||''}" data-field="party" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','party')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${r.debit||''}" data-field="debit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','debit')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Ref No" value="${r.refNo||''}" data-field="refNo" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','refNo')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-credit"><input type="text" placeholder="Paid Account" value="${r.paid||''}" data-field="paid" data-rid="${r.id}" list="tpPaidAccNameList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','paid')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${r.credit||''}" data-field="credit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','credit')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${r.paidNo||''}" data-field="paidNo" data-rid="${r.id}" list="tpPaidNoList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','paidNo')" title="Drag to copy down"></span></td>
+      <td class="cbcell"><input type="text" placeholder="Weight Station" value="${r.weightStation||''}" data-field="weightStation" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)" spellcheck="true" lang="ur"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','weightStation')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-profit"><input type="number" placeholder="0.00" value="${r.profit||''}" data-field="profit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','profit')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-tp"><input type="text" placeholder="TP Account" value="${r.tpAcc||''}" data-field="tpAcc" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAcc')" title="Drag to copy down"></span></td>
+      <td class="cbcell cb-tp"><input type="number" placeholder="0.00" value="${r.tpAmount||''}" data-field="tpAmount" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAmount')" title="Drag to copy down"></span></td>
       <td class="no-print" style="text-align:center;">${isReal?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="tpDeleteRow('${r.id}')">🗑️</button>`:''}</td>
     </tr>`;
   }).join('') + `<datalist id="tpAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="tpPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist><datalist id="tpPaidAccNameList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist>`;
@@ -2995,6 +3045,16 @@ function tpFieldChange(el){
   }else if(['debit','credit','profit','tpAmount'].includes(field)){
     if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     tpUpsertField(rid,field,parseFloat(value)||0);
+    // Debit (Party) amount → auto-mirror into this row's Credit (Paid) amount, same idea as
+    // Cashbook: only when Credit hasn't already been manually filled in with its own value.
+    if(field==='debit' && value){
+      const row2=tpRows.find(r=>r.id===rid);
+      if(row2 && !row2.credit){
+        tpUpsertField(rid,'credit',parseFloat(value)||0);
+        const crInput=tpFindInput(rid,'credit');
+        if(crInput)crInput.value=value;
+      }
+    }
   }else{
     tpUpsertField(rid,field,value);
   }
@@ -3092,6 +3152,43 @@ function tpKeyHandler(ev,el,isLastRow){
     let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
     if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx-1),10);}
   }
+}
+
+// ----- Paste a block of cells across rows & columns, mirrors Cashbook's version -----
+function tpPasteHandler(ev,el){
+  const text=(ev.clipboardData||window.clipboardData).getData('text');
+  if(!text||(!text.includes('\t')&&!text.includes('\n')))return;
+  ev.preventDefault();
+  const grid=text.replace(/\r/g,'').split('\n').filter((r,i,arr)=>!(i===arr.length-1&&r===''));
+  if(!grid.length)return;
+  const field=el.getAttribute('data-field');
+  const startCol=TP_FIELD_ORDER.indexOf(field);
+  if(startCol<0)return;
+  const startRid=el.getAttribute('data-rid');
+  let rids=tpGetRowIds();
+  const startRow=rids.indexOf(startRid);
+  if(startRow<0)return;
+  const rowsNeeded=startRow+grid.length;
+  if(rowsNeeded>rids.length){
+    tpDesiredBlankCount=Math.max(tpDesiredBlankCount,rowsNeeded);
+    renderTpEntries();
+    rids=tpGetRowIds();
+  }
+  grid.forEach((rowText,ri)=>{
+    const targetRid=rids[startRow+ri];
+    if(!targetRid)return;
+    const cols=rowText.split('\t');
+    cols.forEach((val,ci)=>{
+      const colField=TP_FIELD_ORDER[startCol+ci];
+      if(!colField)return;
+      val=val.trim();
+      if(val==='')return;
+      const inp=tpFindInput(targetRid,colField);
+      if(inp){inp.value=val;tpFieldChange(inp);}
+    });
+  });
+  toast('Data paste ho gaya! ✅','success');
+  setTimeout(()=>renderTpEntries(),50);
 }
 
 // ----- Drag-to-fill any column down (Excel-style fill handle), mirrors Cashbook's version -----
@@ -4147,9 +4244,16 @@ function importData(ev){
       paidAccounts=d.paidAccounts||[];paidEntries=d.paidEntries||[];
       tpRows=d.tpRows||[];DB.set('cargo_tp_rows',tpRows);
       obRows=d.obRows||[];DB.set('cargo_ob_rows',obRows);
+      if(d.summaryTopAccounts)summaryTopAccounts=d.summaryTopAccounts;DB.set('summary_top_accounts',summaryTopAccounts);
       if(d.cfg)cfg={...cfg,...d.cfg};
       recycleBin=d.recycleBin||[];DB.set('cargo_recycle',recycleBin);
-      save();savePaid();initApp();renderPaidAccounts();toast('Restore ho gaya! ✅','success');}}
+      save();savePaid();
+      // Push EVERYTHING to the cloud (not just entries/accounts/cfg from save(), or paidAccounts/paidEntries
+      // from savePaid()) — otherwise tpRows/obRows/summaryTopAccounts only exist locally, and the next time
+      // this device reconnects (or another device syncs), Firestore's still-old copy overwrites the
+      // just-restored data and the Party & Paid / Opening Balance rows silently vanish again.
+      pushToCloud({entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows,obRows});
+      initApp();renderPaidAccounts();renderTpEntries();renderObEntries();toast('Restore ho gaya! ✅','success');}}
     catch(err){toast('File invalid hai!','error');}};
   reader.readAsText(file);ev.target.value='';
 }
