@@ -533,7 +533,8 @@
                 <th style="color:#fca5a5;">Debit Amt</th>
                 <th data-i18n="refNo">Ref No</th>
                 <th style="color:#e8a020;">Paid No</th>
-                <th data-i18n="description">Description</th>
+                <th style="color:#f59e0b;">Type</th>
+                <th data-i18n="description">Description <span style="font-weight:400;font-size:10px;color:#94a3b8;">(auto)</span></th>
                 <th style="color:#86efac;">Credit Account</th>
                 <th style="color:#86efac;">Credit Amt</th>
                 <th data-i18n="refNo">Ref No</th>
@@ -2286,7 +2287,9 @@ function cbUpsertField(pairId,side,field,value){
     if(!dr){
       // create DR entry only if there's something meaningful being typed
       const _ppn=window.cbPendingPaidNo?window.cbPendingPaidNo[pairId]||'':'';
-      dr={id:uid(),pairId,date:existingDate,name:'',type:'DR',amount:0,ref:'',desc:'',paidNo:_ppn};
+      const _pmode=window.cbPendingMode?window.cbPendingMode[pairId]||'':'';
+      const _pnote=window.cbPendingNote?window.cbPendingNote[pairId]||'':'';
+      dr={id:uid(),pairId,date:existingDate,name:'',type:'DR',amount:0,ref:'',desc:'',paidNo:_ppn,mode:_pmode,note:_pnote};
       entries.push(dr);
       delete cbPendingDates[pairId];
       if(window.cbPendingPaidNo)delete window.cbPendingPaidNo[pairId];
@@ -2298,7 +2301,9 @@ function cbUpsertField(pairId,side,field,value){
   }else{
     if(!cr){
       const _ppn2=window.cbPendingPaidNo?window.cbPendingPaidNo[pairId]||'':'';
-      cr={id:uid(),pairId,date:existingDate,name:'',type:'CR',amount:0,ref:'',desc:'',paidNo:_ppn2};
+      const _pmode2=window.cbPendingMode?window.cbPendingMode[pairId]||'':'';
+      const _pnote2=window.cbPendingNote?window.cbPendingNote[pairId]||'':'';
+      cr={id:uid(),pairId,date:existingDate,name:'',type:'CR',amount:0,ref:'',desc:'',paidNo:_ppn2,mode:_pmode2,note:_pnote2};
       entries.push(cr);
       delete cbPendingDates[pairId];
       if(window.cbPendingPaidNo)delete window.cbPendingPaidNo[pairId];
@@ -2386,7 +2391,7 @@ function renderCashbook(){
   if(!tbody)return;
 
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="11" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
+    tbody.innerHTML='<tr><td colspan="12" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
     document.getElementById('cashbookTotals').textContent='';
     return;
   }
@@ -2396,8 +2401,13 @@ function renderCashbook(){
     const dateVal=r.date||'';
     const drName=r.dr?.name||'', drAmt=r.dr?.amount||'', drRef=r.dr?.ref||'';
     const crName=r.cr?.name||'', crAmt=r.cr?.amount||'', crRef=r.cr?.ref||'';
-    const sharedDesc=cbSharedDescDisplay(r.dr?.desc,r.cr?.desc);
     const paidNo=r.dr?.paidNo||r.cr?.paidNo||r.paidNo||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
+    const modeVal=r.dr?.mode||r.cr?.mode||(window.cbPendingMode?window.cbPendingMode[pid]:'')||'';
+    const noteVal=r.dr?.note||r.cr?.note||(window.cbPendingNote?window.cbPendingNote[pid]:'')||'';
+    const autoPreview=cbComposeDesc(drName,crName,modeVal,noteVal);
+    const previewHtml=(autoPreview.dr||autoPreview.cr)
+      ? `<div style="font-size:10px;line-height:1.35;color:#64748b;margin-bottom:3px;">${autoPreview.dr?('DR: '+autoPreview.dr):''}${(autoPreview.dr&&autoPreview.cr)?'<br>':''}${autoPreview.cr?('CR: '+autoPreview.cr):''}</div>`
+      : '';
     const isLast=(i===rows.length-1);
     return `<tr data-pid="${pid}">
       <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
@@ -2409,7 +2419,17 @@ function renderCashbook(){
       <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','')" title="Drag to copy down"></span></td>
-      <td class="cbcell" style="background:rgba(99,102,241,0.06);"><input type="text" placeholder="Description (dono taraf jayega)" value="${sharedDesc}" data-field="desc" data-side="" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur" style="color:#4f46e5;font-weight:600;" title="Yahan jo likhenge, () mein band hoke Debit aur Credit dono ki description mein save hoga"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','desc','')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(245,158,11,0.06);">
+        <select data-field="mode" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" style="color:#b45309;font-weight:600;width:100%;height:100%;border:none;background:transparent;outline:none;padding:9px 6px;font-size:13px;font-family:inherit;">
+          <option value="" ${!modeVal?'selected':''}>—</option>
+          <option value="Cash" ${modeVal==='Cash'?'selected':''}>Cash</option>
+          <option value="Transfer" ${modeVal==='Transfer'?'selected':''}>Transfer</option>
+        </select>
+      </td>
+      <td class="cbcell" style="background:rgba(99,102,241,0.06);">
+        ${previewHtml}
+        <input type="text" placeholder="Extra note (optional)" value="${noteVal}" data-field="note" data-side="" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" spellcheck="true" lang="ur" style="color:#4f46e5;font-weight:600;" title="Yahan jo likhenge, () mein band hoke description ke aakhir mein add ho jayega. Description khud ba khud account names + Cash/Transfer se banti hai."><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','note','')" title="Drag to copy down"></span>
+      </td>
       <td class="cbcell cb-credit"><input type="text" placeholder="Account" value="${crName}" data-field="name" data-side="cr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','cr')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-credit"><input type="number" placeholder="0.00" value="${crAmt||''}" data-field="amount" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','cr')" title="Drag to copy down"></span></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${crRef}" data-field="ref" data-side="cr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','cr')" title="Drag to copy down"></span></td>
@@ -2425,24 +2445,30 @@ function renderCashbook(){
     : ('Debit: '+fmt(tdr)+' | Credit: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr)));
 }
 
-// The single shared Description box shows plain text for editing (no visible parentheses) even
-// though what's actually stored on both dr.desc/cr.desc is the "(...)" wrapped version — this
-// unwraps it back to plain text for display. Falls back to whichever side actually has text,
-// so descriptions written before this change (which could differ between debit/credit) still show
-// up here instead of disappearing.
-function cbSharedDescDisplay(drDesc,crDesc){
-  let raw=(drDesc&&drDesc.trim())?drDesc.trim():(crDesc||'').trim();
-  const m=raw.match(/^\((.*)\)$/s);
-  return m?m[1]:raw;
+// Auto-generated cashbook description — replaces the old single shared-text-box approach.
+// Debit side reads:  "<Credit Account Name> Se Jama[ Cash/Transfer][ (extra note)]"
+// Credit side reads: "<Debit Account Name> Main Jama[ Cash/Transfer][ (extra note)]"
+// e.g. Debit=Meezan, Credit=Cashbook, Type=Cash → DR desc: "Cashbook Se Jama Cash", CR desc: "Meezan Main Jama Cash"
+function cbComposeDesc(drName,crName,mode,note){
+  const modeSuffix=mode?(' '+mode):'';
+  const noteTrim=(note||'').trim();
+  const noteSuffix=noteTrim?(' ('+noteTrim+')'):'';
+  const dr=crName?(crName+' Se Jama'+modeSuffix+noteSuffix):'';
+  const cr=drName?(drName+' Main Jama'+modeSuffix+noteSuffix):'';
+  return {dr,cr};
 }
-// Writes one description into BOTH sides of a cashbook row, wrapped in parentheses — replaces the
-// old behavior where each side had its own separate (and on top of that, auto-generated "Transfer
-// to X" / "Receive from Y") description.
-function cbUpsertSharedDesc(pairId,rawValue){
-  const val=(rawValue||'').trim();
-  const wrapped=val?`(${val})`:'';
-  cbUpsertField(pairId,'dr','desc',wrapped);
-  cbUpsertField(pairId,'cr','desc',wrapped);
+// Recomputes and writes both sides' descriptions from the current names + type + note.
+// Also mirrors mode/note onto whichever entries exist, and remembers pending values for
+// not-yet-created blank rows (same pattern as cbPendingDates/cbPendingPaidNo).
+function cbRegenerateDesc(pairId){
+  const dr=entries.find(e=>(e.pairId||e.id)===pairId && e.type==='DR');
+  const cr=entries.find(e=>(e.pairId||e.id)===pairId && e.type==='CR');
+  const drName=dr?.name||'', crName=cr?.name||'';
+  const mode=(dr&&dr.mode)||(cr&&cr.mode)||(window.cbPendingMode?window.cbPendingMode[pairId]:'')||'';
+  const note=(dr&&dr.note)||(cr&&cr.note)||(window.cbPendingNote?window.cbPendingNote[pairId]:'')||'';
+  const composed=cbComposeDesc(drName,crName,mode,note);
+  if(dr){dr.desc=composed.dr;dr.mode=mode;dr.note=note;}
+  if(cr){cr.desc=composed.cr;cr.mode=mode;cr.note=note;}
 }
 function cbFieldChange(el){
   const pid=el.getAttribute('data-pid');
@@ -2490,15 +2516,40 @@ function cbFieldChange(el){
     if(paidAcc) toast('Paid Account "'+paidAcc.name+'" se link ho gaya! ✅','success');
     return;
   }
+  if(field==='mode'){
+    // Cash / Transfer type for this row — mirrored onto both sides, then folds into the auto description.
+    const modeVal=value.trim();
+    let matched=false;
+    entries.filter(e=>(e.pairId||e.id)===pid).forEach(e=>{e.mode=modeVal;matched=true;});
+    if(!matched){
+      if(!window.cbPendingMode)window.cbPendingMode={};
+      window.cbPendingMode[pid]=modeVal;
+    }
+    cbRegenerateDesc(pid);
+    cbSyncPaidLink(pid);
+    save();
+    return;
+  }
+  if(field==='note'){
+    // Extra note (side is always '' for this field) — appended in brackets at the end of the
+    // auto-generated description on both Debit and Credit sides.
+    let matched=false;
+    entries.filter(e=>(e.pairId||e.id)===pid).forEach(e=>{e.note=value;matched=true;});
+    if(!matched){
+      if(!window.cbPendingNote)window.cbPendingNote={};
+      window.cbPendingNote[pid]=value;
+    }
+    cbRegenerateDesc(pid);
+    cbSyncPaidLink(pid);
+    save();
+    return;
+  }
   if(field==='date'){
     if(!value){return;} // ignore clearing date on blank row
     cbUpsertField(pid,null,'date',value);
-  }else if(field==='desc'){
-    // Shared Description box (side is always '' for this field) — one value written to both
-    // Debit and Credit descriptions, wrapped in parentheses.
-    cbUpsertSharedDesc(pid,value);
   }else if(field==='name'){
     cbUpsertField(pid,side,'name',value);
+    cbRegenerateDesc(pid); // account name changed → both sides' auto description need recomputing
     cbSyncPaidLink(pid);
   }else{
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
@@ -2586,11 +2637,13 @@ const CB_FIELD_ORDER=[
   {side:'',field:'date'},
   {side:'dr',field:'name'},{side:'dr',field:'amount'},{side:'dr',field:'ref'},
   {side:'',field:'paidNo'},
-  {side:'',field:'desc'},
+  {side:'',field:'mode'},
+  {side:'',field:'note'},
   {side:'cr',field:'name'},{side:'cr',field:'amount'},{side:'cr',field:'ref'}
 ];
 function cbFindInput(pid,side,field){
-  return document.querySelector(`#cashbookBody input[data-pid="${pid}"][data-side="${side}"][data-field="${field}"]`);
+  // matches both <input> and <select> (the Cash/Transfer Type cell is a <select>)
+  return document.querySelector(`#cashbookBody [data-pid="${pid}"][data-side="${side}"][data-field="${field}"]`);
 }
 function cbGetRowPids(){
   return [...document.querySelectorAll('#cashbookBody tr')].map(r=>r.getAttribute('data-pid'));
