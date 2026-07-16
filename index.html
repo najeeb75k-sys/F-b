@@ -506,7 +506,7 @@
               <input type="number" id="cbBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
               <button class="btn btn-gold btn-sm" onclick="cbAddBulkRows()">➕ Add Rows</button>
               <button class="btn btn-outline btn-sm" onclick="cbRefreshAllDescriptions()" title="Purani sari entries ki description naye tareeqe se dobara bana dega">🔄 Refresh Descriptions</button>
-              <button class="btn btn-outline btn-sm" onclick="cbRefreshAllPaidLinks()" title="Purani sari entries ke Paid Account links dobara sahi Paid No ke hisaab se check karega — ek naam ke do Paid Account hone par galat link theek karta hai">🔄 Refresh Paid Links</button>
+              <button class="btn btn-outline btn-sm" onclick="cbRefreshAllPaidLinks()" title="Paid Account links dobara check karega, manual Paid entries jo Summary mein missing thi wo add karega, aur purani 'orphan' (deleted row ki bachi hui) entries Recycle Bin mein bhej dega">🔄 Refresh Paid Links</button>
               <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
             </div>
           </div>
@@ -2508,23 +2508,42 @@ function cbRefreshAllDescriptions(){
 // Migration/repair helper: re-runs cbSyncPaidLink for EVERY existing Cashbook row so any entry that
 // got attached to the wrong Paid Account in the past (e.g. duplicate-name accounts, or stale
 // whitespace in an old Paid No) gets re-linked using today's stricter matching rules. Also re-syncs
-// every TP (Party & Paid Entry) and Opening Balance row — their Paid Account link (used by both
-// Summary and the Paid Account's own ledger) can go stale the same way, e.g. if the Paid Account
-// was created only after the row was first entered. Safe to run repeatedly — pure recompute, not
-// additive.
+// every TP (Party & Paid Entry) and Opening Balance row, backfills any manually-added Paid Account
+// ledger row that never made it into Summary/Dashboard, and — importantly — removes any "orphan"
+// TP/Opening Balance ledger entries left behind by a row that no longer exists (these were being
+// counted twice, and caused totals to go wrong the moment anything nearby was touched or deleted).
+// Safe to run repeatedly. Anything removed goes to the Recycle Bin, never deleted outright.
+function cbCleanupOrphanEntries(){
+  const tpIds=new Set(tpRows.map(r=>r.id));
+  const obIds=new Set(obRows.map(r=>r.id));
+  const orphans=entries.filter(e=>(e.tpRowId&&!tpIds.has(e.tpRowId))||(e.obRowId&&!obIds.has(e.obRowId)));
+  if(!orphans.length)return 0;
+  const orphanIds=orphans.map(e=>e.id);
+  orphans.forEach(e=>{recycleBin.push({...e,deletedAt:new Date().toISOString(),deletedFrom:'orphanCleanup'});});
+  entries=entries.filter(e=>!orphanIds.includes(e.id));
+  paidEntries=paidEntries.filter(pe=>!orphanIds.includes(pe.cashbookRef));
+  DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+  return orphans.length;
+}
 function cbRefreshAllPaidLinks(){
   const rows=cbRowsFromEntries().filter(r=>r.pairId);
   const tpCount=tpRows.filter(r=>!r.blank).length;
   const obCount=obRows.filter(r=>!(!r.debitAcc && !r.creditAcc)).length;
   const total=rows.length+tpCount+obCount;
   if(!total){toast('Koi entry nahi mili.','error');return;}
-  if(!confirm(total+' entries (Cashbook + TP Entry + Opening Balance) ke Paid Account links dobara check ho kar sahi kiye jayenge. Aage badhein?'))return;
+  if(!confirm(total+' entries (Cashbook + TP Entry + Opening Balance) check ho kar sahi kiye jayenge, aur purani "orphan" (bhoot) entries hatai jayengi. Aage badhein?'))return;
+  const orphanCount=cbCleanupOrphanEntries();
   rows.forEach(r=>cbSyncPaidLink(r.pairId));
   tpRows.forEach(r=>{if(!r.blank)tpSyncRowEntries(r);});
   obRows.forEach(r=>{if(r.debitAcc||r.creditAcc)obSyncRowEntries(r);});
+  let mirrorCount=0;
+  paidEntries.filter(pe=>!pe.cashbookRef).forEach(pe=>{syncPaidEntryMirror(pe);mirrorCount++;});
   save();savePaid();
   renderCashbook();
-  toast('Sare Paid Account links refresh ho gaye! ✅','success');
+  let msg='Refresh mukammal! ✅';
+  if(orphanCount)msg+=' '+orphanCount+' purani orphan entries Recycle Bin mein bhej di gayin.';
+  if(mirrorCount)msg+=' '+mirrorCount+' manual Paid Account entries Summary mein add ki gayin.';
+  toast(msg,'success');
 }
 function cbFieldChange(el){
   const pid=el.getAttribute('data-pid');
@@ -3004,13 +3023,6 @@ function tpSyncRowEntries(row){
     e.amount=amt;
     e.desc=desc||'';
     e.ref=ref||'';
-    // Stamp this row's Paid No directly onto every generated entry (not just the mirror link) —
-    // so Summary's grouping still shows the CORRECT Paid No even if tpLinkPaidAccount() below
-    // fails to find a matching Paid Account (typo'd/renamed Paid No, or the account was deleted).
-    // Without this, such entries silently fell back to a bare-name key and could not be told apart
-    // from OTHER accounts sharing the same name — this is what caused same-name/different-Paid-No
-    // Paid Accounts to look "merged into one" on the Summary page.
-    e.paidNo=String(row.paidNo||'').trim();
   }
   const partyDesc=[row.paid,row.weightStation].filter(v=>v&&String(v).trim()).join(' - ');
   const paidDesc=[row.weightStation,row.party].filter(v=>v&&String(v).trim()).join(' - ');
@@ -3029,8 +3041,7 @@ function tpSyncRowEntries(row){
 function tpLinkPaidAccount(row){
   const paidEid=row.id+'_paid';
   const paidEntryObj=entries.find(e=>e.id===paidEid);
-  const pnoVal=String(row.paidNo||'').trim();
-  const paidAcc=pnoVal?paidAccounts.find(a=>String(a.paidNo||'').trim()===pnoVal):null;
+  const paidAcc=paidAccounts.find(a=>a.paidNo===row.paidNo);
   const existingLink=paidEntries.find(pe=>pe.cashbookRef===paidEid);
   if(paidEntryObj && paidAcc){
     if(!existingLink){
@@ -3042,10 +3053,6 @@ function tpLinkPaidAccount(row){
   }else if(existingLink){
     paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==paidEid);
     savePaid();
-  }else if(paidEntryObj && pnoVal){
-    // A Paid No was typed but it doesn't match ANY Paid Account — warn immediately instead of
-    // letting this row silently turn into an orphaned entry that Summary can't correctly group.
-    toast('⚠️ Paid No "'+pnoVal+'" kisi Paid Account se match nahi hua — pehle Paid Accounts mein add karein!','error');
   }
 }
 
@@ -3565,9 +3572,6 @@ function obSyncRowEntries(row){
     e.amount=amt;
     e.desc=row.desc||'Opening Balance';
     e.ref='';
-    // Same reasoning as tpSyncRowEntries: stamp the Paid No directly on the entry so Summary's
-    // grouping key never has to fall back to a bare account name when the mirror link fails.
-    e.paidNo=String(row.paidNo||'').trim();
   }
   makeOrUpdate('debit','DR',row.debitAcc,row.debitAmt);
   makeOrUpdate('credit','CR',row.creditAcc,row.creditAmt);
@@ -4043,25 +4047,30 @@ function classifyAccountPrefix(name){
 }
 
 // Two Paid Accounts can share the exact same display name but have different Paid Nos — they are
-// still separate accounts and must never have their balances merged in Summary. For any entry that
-// belongs to the "P" (Paid Account) group, the grouping key includes its Paid No so each Paid
-// Account gets its own row — and the Paid No shows right in the label.
-// The Paid No is looked up via the paidEntries mirror first (paidAccId <- cashbookRef — the same
-// mapping the Paid Account's own ledger page uses), then falls back to the entry's own .paidNo
-// field. Cashbook, TP (Party & Paid Entry), and Opening Balance rows all now stamp .paidNo directly
-// onto every entry they generate, so this fallback stays accurate even if the mirror link is ever
-// missing (e.g. a typo'd Paid No that doesn't match any account) — instead of silently collapsing
-// to a bare name and merging with any OTHER account that happens to share that same name.
-function summaryKeyFor(e){
-  if(classifyAccountPrefix(e.name)!=='P')return e.name;
+// still separate accounts and must never have their balances merged in Summary. And an entry's own
+// typed account name isn't always reliable (typos, wrong prefix) — so for every entry we first check
+// its actual link in the paidEntries mirror (the same cashbookRef -> paidAccId mapping the Paid
+// Account's own ledger page uses) and trust THAT over the entry's own name text. Only when no such
+// link exists do we fall back to reading the entry's own name/paidNo directly.
+// Returns {key, rawName} — key is what Summary groups/displays by (Paid Accounts get their Paid No
+// baked in); rawName is what classifyAccountPrefix uses to decide which group (PA/Party/Vehicle/Paid)
+// the entry belongs to.
+function summaryEntryMeta(e){
   const pe=paidEntries.find(x=>x.cashbookRef===e.id);
   const pa=pe?paidAccounts.find(a=>a.id===pe.paidAccId):null;
-  const pno=(pa&&String(pa.paidNo||'').trim())||String(e.paidNo||'').trim();
-  return pno?(e.name+' (Paid No: '+pno+')'):e.name;
+  if(pa){
+    const pno=String(pa.paidNo||'').trim();
+    return {key:pno?(pa.name+' (Paid No: '+pno+')'):pa.name, rawName:pa.name};
+  }
+  if(classifyAccountPrefix(e.name)==='P'){
+    const pno=String(e.paidNo||'').trim();
+    return {key:pno?(e.name+' (Paid No: '+pno+')'):e.name, rawName:e.name};
+  }
+  return {key:e.name, rawName:e.name};
 }
-// Reverses summaryKeyFor's composite "Name (Paid No: X)" format back to the actual Paid Account
-// record, so Summary's Detail buttons can open the correct Paid Account ledger (not just any
-// account sharing that name).
+// Reverses the composite "Name (Paid No: X)" format back to the actual Paid Account record, so
+// Summary's Detail buttons can open the correct Paid Account ledger (not just any account sharing
+// that name).
 function summaryResolvePaidAcc(key){
   const m=String(key||'').match(/^(.*) \(Paid No: (.+)\)$/);
   if(m){
@@ -4077,10 +4086,10 @@ function buildSummaryModel(data){
   const am={};
   const keyRawName={};
   data.forEach(e=>{
-    const key=summaryKeyFor(e);
+    const {key,rawName}=summaryEntryMeta(e);
     if(!am[key])am[key]={cr:0,dr:0};
     if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;
-    if(!(key in keyRawName))keyRawName[key]=e.name;
+    if(!(key in keyRawName))keyRawName[key]=rawName;
   });
 
   // Top accounts are pulled out separately above the grouped sections, so they must be excluded
@@ -4369,7 +4378,7 @@ function openSummaryGroupDetail(names,label){
   if(!names.length){toast('Is group mein koi account nahi hai','');return;}
   const data=summaryFilteredEntries();
   const am={};
-  data.forEach(e=>{const key=summaryKeyFor(e);if(!am[key])am[key]={cr:0,dr:0};if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;});
+  data.forEach(e=>{const key=summaryEntryMeta(e).key;if(!am[key])am[key]={cr:0,dr:0};if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;});
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
     const b=v.cr-v.dr;
