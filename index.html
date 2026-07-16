@@ -4019,21 +4019,51 @@ function classifyAccountPrefix(name){
   return null;
 }
 
+// Two Paid Accounts can share the exact same display name but have different Paid Nos — they are
+// still separate accounts and must never have their balances merged in Summary. For any entry that
+// belongs to the "P" (Paid Account) group, the grouping key includes its Paid No (when the entry
+// has one recorded) so each Paid Account gets its own row — and the Paid No shows right in the
+// label, so it's clear at a glance which one a balance belongs to.
+function summaryKeyFor(e){
+  if(classifyAccountPrefix(e.name)==='P'){
+    const pno=String(e.paidNo||'').trim();
+    if(pno)return e.name+' (Paid No: '+pno+')';
+  }
+  return e.name;
+}
+// Reverses summaryKeyFor's composite "Name (Paid No: X)" format back to the actual Paid Account
+// record, so Summary's Detail buttons can open the correct Paid Account ledger (not just any
+// account sharing that name).
+function summaryResolvePaidAcc(key){
+  const m=String(key||'').match(/^(.*) \(Paid No: (.+)\)$/);
+  if(m){
+    const pno=m[2].trim();
+    return paidAccounts.find(a=>String(a.paidNo||'').trim()===pno)||null;
+  }
+  return paidAccounts.find(a=>a.name.trim().toLowerCase()===String(key||'').trim().toLowerCase())||null;
+}
+
 // Builds the full grouped summary model from a filtered list of entries.
 // Returns everything renderSummary() and the print version both need, so the two stay in sync.
 function buildSummaryModel(data){
   const am={};
-  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
+  const keyRawName={};
+  data.forEach(e=>{
+    const key=summaryKeyFor(e);
+    if(!am[key])am[key]={cr:0,dr:0};
+    if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;
+    if(!(key in keyRawName))keyRawName[key]=e.name;
+  });
 
   // Top accounts are pulled out separately above the grouped sections, so they must be excluded
   // from their PA-/Party-/V-/P- group below — otherwise their balance would be counted twice.
   const topNames=new Set(summaryTopAccounts.filter(Boolean));
 
   const groups={PA:[],PARTY:[],V:[],P:[]};
-  Object.keys(am).forEach(name=>{
-    if(topNames.has(name))return;
-    const g=classifyAccountPrefix(name);
-    if(g)groups[g].push(name);
+  Object.keys(am).forEach(key=>{
+    if(topNames.has(key))return;
+    const g=classifyAccountPrefix(keyRawName[key]);
+    if(g)groups[g].push(key);
   });
 
   // Every account gets exactly ONE figure: its net balance (CR total minus DR total).
@@ -4055,7 +4085,15 @@ function buildSummaryModel(data){
 
   const top=summaryTopAccounts.filter(Boolean).map(n=>({name:n,cr:am[n]?.cr||0,dr:am[n]?.dr||0}));
 
-  return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames};
+  // Maps each Paid-group key back to its actual Paid Account id, so Summary's Detail buttons can
+  // open that specific account's own ledger (paidEntries) instead of a plain name-based lookup.
+  const paidAccIdByKey={};
+  groups.P.forEach(key=>{
+    const pa=summaryResolvePaidAcc(key);
+    if(pa)paidAccIdByKey[key]=pa.id;
+  });
+
+  return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames,paidAccIdByKey};
 }
 
 // ===================== PA REPORT (Pa-Tyre Copy / Pa-Profit / Pa-Extra Expense) =====================
@@ -4254,10 +4292,12 @@ function renderSummary(){
   // net balance — never split into a CR-side row in one group and a DR-side row in another.
   const subRowHtml=(name)=>{
     const b=m.net(name);
+    const paidId=m.paidAccIdByKey[name];
+    const detailClick=paidId?`openPaidAccDetail('${paidId}')`:`openAccDetail(${JSON.stringify(name)})`;
     return `<tr class="summary-sub-row">
       <td style="padding-left:32px;color:var(--text-light);font-size:13px;">↳ ${name}</td>
       <td style="font-size:13px;text-align:center;color:${b>=0?'#15803d':'#dc2626'}">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td>
-      <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="openAccDetail(${JSON.stringify(name)})">📄</button></td>
+      <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="${detailClick}">📄</button></td>
     </tr>`;
   };
   // Amanat block: shows only credit-balance accounts (already filtered + ranked biggest-first
@@ -4301,11 +4341,13 @@ function openSummaryGroupDetail(names,label){
   if(!names.length){toast('Is group mein koi account nahi hai','');return;}
   const data=summaryFilteredEntries();
   const am={};
-  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
+  data.forEach(e=>{const key=summaryKeyFor(e);if(!am[key])am[key]={cr:0,dr:0};if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;});
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
+    const paidAcc=summaryResolvePaidAcc(n);
+    const clickAction=paidAcc?`openPaidAccDetail('${paidAcc.id}')`:`openAccDetail(${JSON.stringify(n)})`;
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
-      <span style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="closeModal('summaryGroupModal');openAccDetail('${n}')">${n}</span>
+      <span style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="closeModal('summaryGroupModal');${clickAction}">${n}</span>
       <span style="font-size:12px;"><span style="color:#15803d;">CR:${fmt(v.cr)}</span> &nbsp; <span style="color:#dc2626;">DR:${fmt(v.dr)}</span></span>
     </div>`;
   }).join('');
