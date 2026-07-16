@@ -332,10 +332,11 @@
        individual line (.print-group-row / .print-row), so a single line never gets cut in half,
        but the group as a whole flows across the column break and the next account starts right
        where the previous one ended. */
-    .print-block{margin-bottom:5px;}
-    .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;}
+    .print-block{margin-bottom:5px;border:1.5px solid #122A4A;border-radius:4px;padding:1px;}
+    .print-group-row{font-family:Poppins,sans-serif;font-weight:800;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;border:1.5px solid #122A4A;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1.5px solid #122A4A;font-weight:700;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row span{font-weight:700;}
+    .print-sub-row{padding-left:14px;color:#1e293b;font-size:11px;font-weight:700;}
     .print-summary-total{break-inside:avoid;margin-top:8px;padding:10px 14px;border:2px solid #122A4A;border-radius:6px;background:#eef2f8;font-weight:800;font-size:14.5px;text-align:center;line-height:1.7;}
   }
 </style>
