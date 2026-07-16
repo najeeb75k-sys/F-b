@@ -4344,11 +4344,12 @@ function openSummaryGroupDetail(names,label){
   data.forEach(e=>{const key=summaryKeyFor(e);if(!am[key])am[key]={cr:0,dr:0};if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;});
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
+    const b=v.cr-v.dr;
     const paidAcc=summaryResolvePaidAcc(n);
     const clickAction=paidAcc?`openPaidAccDetail('${paidAcc.id}')`:`openAccDetail(${JSON.stringify(n)})`;
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="closeModal('summaryGroupModal');${clickAction}">${n}</span>
-      <span style="font-size:12px;"><span style="color:#15803d;">CR:${fmt(v.cr)}</span> &nbsp; <span style="color:#dc2626;">DR:${fmt(v.dr)}</span></span>
+      <span style="font-size:12px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span>
     </div>`;
   }).join('');
   document.getElementById('summaryGroupModalTitle').textContent=label+' — Accounts';
