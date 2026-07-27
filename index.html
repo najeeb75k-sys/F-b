@@ -332,11 +332,10 @@
        individual line (.print-group-row / .print-row), so a single line never gets cut in half,
        but the group as a whole flows across the column break and the next account starts right
        where the previous one ended. */
-    .print-block{margin-bottom:5px;border:1.5px solid #122A4A;border-radius:4px;padding:1px;}
-    .print-group-row{font-family:Poppins,sans-serif;font-weight:800;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;border:1.5px solid #122A4A;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1.5px solid #122A4A;font-weight:700;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-row span{font-weight:700;}
-    .print-sub-row{padding-left:14px;color:#1e293b;font-size:11px;font-weight:700;}
+    .print-block{margin-bottom:5px;}
+    .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;}
     .print-summary-total{break-inside:avoid;margin-top:8px;padding:10px 14px;border:2px solid #122A4A;border-radius:6px;background:#eef2f8;font-weight:800;font-size:14.5px;text-align:center;line-height:1.7;}
   }
 </style>
@@ -507,7 +506,6 @@
               <input type="number" id="cbBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
               <button class="btn btn-gold btn-sm" onclick="cbAddBulkRows()">➕ Add Rows</button>
               <button class="btn btn-outline btn-sm" onclick="cbRefreshAllDescriptions()" title="Purani sari entries ki description naye tareeqe se dobara bana dega">🔄 Refresh Descriptions</button>
-              <button class="btn btn-outline btn-sm" onclick="cbRefreshAllPaidLinks()" title="Paid Account links dobara check karega, manual Paid entries jo Summary mein missing thi wo add karega, aur purani 'orphan' (deleted row ki bachi hui) entries Recycle Bin mein bhej dega">🔄 Refresh Paid Links</button>
               <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
             </div>
           </div>
@@ -1747,12 +1745,17 @@ function startAllAccountsScroll(){
   },80);
 }
 function refreshDash(){
-  // Total Jama / Total Baqaya — raw sum of every CR entry and every DR entry across ALL
-  // accounts (no per-account netting). This ensures every entry's amount is counted on its
-  // own side, even if an account has entries on both sides.
+  // Total Jama / Total Baqaya — ab har account ka NET balance (us account ki CR minus DR)
+  // nikal kar, jo account net Jama (credit) mein hai uska balance Total Jama mein aur jo net
+  // Baqaya (debit) mein hai uska balance Total Baqaya mein jama karte hain. Isi tarah Summary
+  // page aur Summary print bhi kaam karte hain, taake teeno jagah asal account-balance ke
+  // hisab se hi hisaab dikhe, har entry ko alag se gin kar nahi.
+  const allAm={};
+  entries.forEach(e=>{if(!allAm[e.name])allAm[e.name]={cr:0,dr:0};if(e.type==='CR')allAm[e.name].cr+=e.amount;else allAm[e.name].dr+=e.amount;});
   let balCR=0,balDR=0;
-  entries.forEach(e=>{
-    if(e.type==='CR')balCR+=e.amount;else balDR+=e.amount;
+  Object.values(allAm).forEach(v=>{
+    const net=v.cr-v.dr;
+    if(net>0)balCR+=net; else if(net<0)balDR+=-net;
   });
   const bal=balCR-balDR;
   // Total Accounts count (unique account names from accounts list + any entry-only names)
@@ -1764,8 +1767,6 @@ function refreshDash(){
   bEl.textContent=fmt(Math.abs(bal));
   bEl.style.color=bal>=0?'#22c55e':'#ef4444';
   // all accounts (auto-scrolling)
-  const allAm={};
-  entries.forEach(e=>{if(!allAm[e.name])allAm[e.name]={cr:0,dr:0};if(e.type==='CR')allAm[e.name].cr+=e.amount;else allAm[e.name].dr+=e.amount;});
   const allList=accounts.map(a=>a.name).filter(n=>true);
   // include any account names that only appear in entries but not in accounts list yet
   Object.keys(allAm).forEach(n=>{if(!allList.includes(n))allList.push(n);});
@@ -2506,46 +2507,6 @@ function cbRefreshAllDescriptions(){
   renderCashbook();
   toast('Sari descriptions refresh ho gayin! ✅','success');
 }
-// Migration/repair helper: re-runs cbSyncPaidLink for EVERY existing Cashbook row so any entry that
-// got attached to the wrong Paid Account in the past (e.g. duplicate-name accounts, or stale
-// whitespace in an old Paid No) gets re-linked using today's stricter matching rules. Also re-syncs
-// every TP (Party & Paid Entry) and Opening Balance row, backfills any manually-added Paid Account
-// ledger row that never made it into Summary/Dashboard, and — importantly — removes any "orphan"
-// TP/Opening Balance ledger entries left behind by a row that no longer exists (these were being
-// counted twice, and caused totals to go wrong the moment anything nearby was touched or deleted).
-// Safe to run repeatedly. Anything removed goes to the Recycle Bin, never deleted outright.
-function cbCleanupOrphanEntries(){
-  const tpIds=new Set(tpRows.map(r=>r.id));
-  const obIds=new Set(obRows.map(r=>r.id));
-  const orphans=entries.filter(e=>(e.tpRowId&&!tpIds.has(e.tpRowId))||(e.obRowId&&!obIds.has(e.obRowId)));
-  if(!orphans.length)return 0;
-  const orphanIds=orphans.map(e=>e.id);
-  orphans.forEach(e=>{recycleBin.push({...e,deletedAt:new Date().toISOString(),deletedFrom:'orphanCleanup'});});
-  entries=entries.filter(e=>!orphanIds.includes(e.id));
-  paidEntries=paidEntries.filter(pe=>!orphanIds.includes(pe.cashbookRef));
-  DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
-  return orphans.length;
-}
-function cbRefreshAllPaidLinks(){
-  const rows=cbRowsFromEntries().filter(r=>r.pairId);
-  const tpCount=tpRows.filter(r=>!r.blank).length;
-  const obCount=obRows.filter(r=>!(!r.debitAcc && !r.creditAcc)).length;
-  const total=rows.length+tpCount+obCount;
-  if(!total){toast('Koi entry nahi mili.','error');return;}
-  if(!confirm(total+' entries (Cashbook + TP Entry + Opening Balance) check ho kar sahi kiye jayenge, aur purani "orphan" (bhoot) entries hatai jayengi. Aage badhein?'))return;
-  const orphanCount=cbCleanupOrphanEntries();
-  rows.forEach(r=>cbSyncPaidLink(r.pairId));
-  tpRows.forEach(r=>{if(!r.blank)tpSyncRowEntries(r);});
-  obRows.forEach(r=>{if(r.debitAcc||r.creditAcc)obSyncRowEntries(r);});
-  let mirrorCount=0;
-  paidEntries.filter(pe=>!pe.cashbookRef).forEach(pe=>{syncPaidEntryMirror(pe);mirrorCount++;});
-  save();savePaid();
-  renderCashbook();
-  let msg='Refresh mukammal! ✅';
-  if(orphanCount)msg+=' '+orphanCount+' purani orphan entries Recycle Bin mein bhej di gayin.';
-  if(mirrorCount)msg+=' '+mirrorCount+' manual Paid Account entries Summary mein add ki gayin.';
-  toast(msg,'success');
-}
 function cbFieldChange(el){
   const pid=el.getAttribute('data-pid');
   const side=el.getAttribute('data-side');
@@ -2680,30 +2641,18 @@ function cbUpdateTotalsOnly(){
 function cbSyncPaidLink(pid){
   const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
   const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
-  const paidVal=String((dr&&dr.paidNo)||(cr&&cr.paidNo)||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'').trim();
-  // Trim on both sides — old data saved before Paid No inputs were consistently trimmed could have
-  // stray whitespace, which made this exact-match lookup silently fail and fall through to the
-  // ambiguous name-only match below (picking the WRONG account when two Paid Accounts share a name).
-  const paidAccByNo=paidVal?paidAccounts.find(a=>String(a.paidNo||'').trim()===paidVal):null;
+  const paidVal=(dr&&dr.paidNo)||(cr&&cr.paidNo)||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
+  const paidAccByNo=paidVal?paidAccounts.find(a=>a.paidNo===paidVal):null;
   let changed=false;
   [dr,cr].forEach(e=>{
     if(!e)return;
-    // Which Paid Account (if any) does this side actually belong to?
-    // - If this row HAS a Paid No, that Paid No is authoritative: only link when it resolves to a
-    //   real Paid Account AND that account's name matches what's typed on this side. Never fall back
-    //   to a name-only guess here — when two Paid Accounts share the same name but different Paid
-    //   Nos, guessing by name alone can silently attach the entry to the wrong one.
-    // - Only when this row has NO Paid No at all do we fall back to matching by account name — this
-    //   keeps the earlier fix where typing a Paid Account's name without its Paid No still links it
-    //   (ambiguous only in the rare case of duplicate names with no Paid No entered).
-    let paidAcc=null;
-    if(paidVal){
-      if(paidAccByNo && e.name && e.name.trim().toLowerCase()===paidAccByNo.name.trim().toLowerCase()){
-        paidAcc=paidAccByNo;
-      }
-    }else if(e.name){
-      paidAcc=paidAccounts.find(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase())||null;
-    }
+    // Which Paid Account (if any) does this side actually belong to? Prefer the Paid No match,
+    // but ALSO fall back to matching the typed account name directly against the Paid Accounts
+    // list — previously a row only mirrored into the Paid Account ledger if the "Paid No" box
+    // was filled in, so typing a Paid Account's name without also entering its Paid No left the
+    // entry stuck in the Accounts List and missing from its Paid Account page.
+    const paidAccByName=e.name?paidAccounts.find(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase()):null;
+    const paidAcc=(paidAccByNo && e.name && e.name.trim().toLowerCase()===paidAccByNo.name.trim().toLowerCase())?paidAccByNo:paidAccByName;
     const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
     if(paidAcc){
       if(!existingLink){
@@ -4047,61 +3996,21 @@ function classifyAccountPrefix(name){
   return null;
 }
 
-// Two Paid Accounts can share the exact same display name but have different Paid Nos — they are
-// still separate accounts and must never have their balances merged in Summary. And an entry's own
-// typed account name isn't always reliable (typos, wrong prefix) — so for every entry we first check
-// its actual link in the paidEntries mirror (the same cashbookRef -> paidAccId mapping the Paid
-// Account's own ledger page uses) and trust THAT over the entry's own name text. Only when no such
-// link exists do we fall back to reading the entry's own name/paidNo directly.
-// Returns {key, rawName} — key is what Summary groups/displays by (Paid Accounts get their Paid No
-// baked in); rawName is what classifyAccountPrefix uses to decide which group (PA/Party/Vehicle/Paid)
-// the entry belongs to.
-function summaryEntryMeta(e){
-  const pe=paidEntries.find(x=>x.cashbookRef===e.id);
-  const pa=pe?paidAccounts.find(a=>a.id===pe.paidAccId):null;
-  if(pa){
-    const pno=String(pa.paidNo||'').trim();
-    return {key:pno?(pa.name+' (Paid No: '+pno+')'):pa.name, rawName:pa.name};
-  }
-  if(classifyAccountPrefix(e.name)==='P'){
-    const pno=String(e.paidNo||'').trim();
-    return {key:pno?(e.name+' (Paid No: '+pno+')'):e.name, rawName:e.name};
-  }
-  return {key:e.name, rawName:e.name};
-}
-// Reverses the composite "Name (Paid No: X)" format back to the actual Paid Account record, so
-// Summary's Detail buttons can open the correct Paid Account ledger (not just any account sharing
-// that name).
-function summaryResolvePaidAcc(key){
-  const m=String(key||'').match(/^(.*) \(Paid No: (.+)\)$/);
-  if(m){
-    const pno=m[2].trim();
-    return paidAccounts.find(a=>String(a.paidNo||'').trim()===pno)||null;
-  }
-  return paidAccounts.find(a=>a.name.trim().toLowerCase()===String(key||'').trim().toLowerCase())||null;
-}
-
 // Builds the full grouped summary model from a filtered list of entries.
 // Returns everything renderSummary() and the print version both need, so the two stay in sync.
 function buildSummaryModel(data){
   const am={};
-  const keyRawName={};
-  data.forEach(e=>{
-    const {key,rawName}=summaryEntryMeta(e);
-    if(!am[key])am[key]={cr:0,dr:0};
-    if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;
-    if(!(key in keyRawName))keyRawName[key]=rawName;
-  });
+  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
 
   // Top accounts are pulled out separately above the grouped sections, so they must be excluded
   // from their PA-/Party-/V-/P- group below — otherwise their balance would be counted twice.
   const topNames=new Set(summaryTopAccounts.filter(Boolean));
 
   const groups={PA:[],PARTY:[],V:[],P:[]};
-  Object.keys(am).forEach(key=>{
-    if(topNames.has(key))return;
-    const g=classifyAccountPrefix(keyRawName[key]);
-    if(g)groups[g].push(key);
+  Object.keys(am).forEach(name=>{
+    if(topNames.has(name))return;
+    const g=classifyAccountPrefix(name);
+    if(g)groups[g].push(name);
   });
 
   // Every account gets exactly ONE figure: its net balance (CR total minus DR total).
@@ -4123,15 +4032,7 @@ function buildSummaryModel(data){
 
   const top=summaryTopAccounts.filter(Boolean).map(n=>({name:n,cr:am[n]?.cr||0,dr:am[n]?.dr||0}));
 
-  // Maps each Paid-group key back to its actual Paid Account id, so Summary's Detail buttons can
-  // open that specific account's own ledger (paidEntries) instead of a plain name-based lookup.
-  const paidAccIdByKey={};
-  groups.P.forEach(key=>{
-    const pa=summaryResolvePaidAcc(key);
-    if(pa)paidAccIdByKey[key]=pa.id;
-  });
-
-  return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames,paidAccIdByKey};
+  return {am,groups,top,net,groupNet,creditOf,debitOf,amanatNames,paidAmanatNames};
 }
 
 // ===================== PA REPORT (Pa-Tyre Copy / Pa-Profit / Pa-Extra Expense) =====================
@@ -4273,12 +4174,14 @@ function summaryFilteredEntries(){
 
 function renderSummary(){
   const data=summaryFilteredEntries();
-  // Total Jama / Total Baqaya — raw sum of every CR entry and every DR entry (no per-account
-  // netting), so every entry's amount counts on its own side even if an account has entries
-  // on both sides.
+  const m=buildSummaryModel(data);
+  // Total Jama / Total Baqaya — har account ka net balance (CR minus DR) nikal kar, net-Jama
+  // accounts ka total alag aur net-Baqaya accounts ka total alag jama karte hain (Dashboard
+  // aur Summary print jaisa hi hisaab).
   let tcr=0,tdr=0;
-  data.forEach(e=>{
-    if(e.type==='CR')tcr+=e.amount;else tdr+=e.amount;
+  Object.values(m.am).forEach(v=>{
+    const net=v.cr-v.dr;
+    if(net>0)tcr+=net; else if(net<0)tdr+=-net;
   });
   document.getElementById('sum_cr').textContent=fmt(tcr);
   document.getElementById('sum_dr').textContent=fmt(tdr);
@@ -4290,7 +4193,6 @@ function renderSummary(){
   document.getElementById('printCoSum').textContent=cfg.company;
   document.getElementById('printDateSum').textContent='Summary Report | '+new Date().toLocaleDateString('en-PK');
 
-  const m=buildSummaryModel(data);
   const tbody=document.getElementById('summaryBody');
 
   // Top-level row: either a fixed top account, or a group total (Personal / Party / Vehicle / Paid).
@@ -4330,12 +4232,10 @@ function renderSummary(){
   // net balance — never split into a CR-side row in one group and a DR-side row in another.
   const subRowHtml=(name)=>{
     const b=m.net(name);
-    const paidId=m.paidAccIdByKey[name];
-    const detailClick=paidId?`openPaidAccDetail('${paidId}')`:`openAccDetail(${JSON.stringify(name)})`;
     return `<tr class="summary-sub-row">
       <td style="padding-left:32px;color:var(--text-light);font-size:13px;">↳ ${name}</td>
       <td style="font-size:13px;text-align:center;color:${b>=0?'#15803d':'#dc2626'}">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</td>
-      <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="${detailClick}">📄</button></td>
+      <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="openAccDetail(${JSON.stringify(name)})">📄</button></td>
     </tr>`;
   };
   // Amanat block: shows only credit-balance accounts (already filtered + ranked biggest-first
@@ -4379,15 +4279,12 @@ function openSummaryGroupDetail(names,label){
   if(!names.length){toast('Is group mein koi account nahi hai','');return;}
   const data=summaryFilteredEntries();
   const am={};
-  data.forEach(e=>{const key=summaryEntryMeta(e).key;if(!am[key])am[key]={cr:0,dr:0};if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;});
+  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
-    const b=v.cr-v.dr;
-    const paidAcc=summaryResolvePaidAcc(n);
-    const clickAction=paidAcc?`openPaidAccDetail('${paidAcc.id}')`:`openAccDetail(${JSON.stringify(n)})`;
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
-      <span style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="closeModal('summaryGroupModal');${clickAction}">${n}</span>
-      <span style="font-size:12px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span>
+      <span style="font-weight:600;cursor:pointer;color:var(--primary);" onclick="closeModal('summaryGroupModal');openAccDetail('${n}')">${n}</span>
+      <span style="font-size:12px;"><span style="color:#15803d;">CR:${fmt(v.cr)}</span> &nbsp; <span style="color:#dc2626;">DR:${fmt(v.dr)}</span></span>
     </div>`;
   }).join('');
   document.getElementById('summaryGroupModalTitle').textContent=label+' — Accounts';
@@ -4423,13 +4320,14 @@ function saveSummaryTopAccounts(){
 function printPage(id){
   if(id==='summary'){
     const data=summaryFilteredEntries();
-    // Total Jama / Total Baqaya — raw sum of every CR entry and every DR entry (no per-account
-    // netting), matching the on-screen Summary stats.
-    let tcr=0,tdr=0;
-    data.forEach(e=>{
-      if(e.type==='CR')tcr+=e.amount;else tdr+=e.amount;
-    });
     const m=buildSummaryModel(data);
+    // Total Jama / Total Baqaya — account-balance based (same logic as on-screen Summary and
+    // Dashboard), not raw entry sums.
+    let tcr=0,tdr=0;
+    Object.values(m.am).forEach(v=>{
+      const net=v.cr-v.dr;
+      if(net>0)tcr+=net; else if(net<0)tdr+=-net;
+    });
     const PRINT_GROUP_STYLES={
       'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
       'Paid Amanat':   {bg:'#0e7490',color:'#fff',icon:'🔐'},
