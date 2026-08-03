@@ -43,6 +43,13 @@ function isAppShellRequest(request) {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
+  // Only handle requests to our own site. Cross-origin requests — especially Firestore's
+  // real-time streaming/webchannel calls to firestore.googleapis.com — must NOT be
+  // intercepted here: their streaming response can't be cloned/cached like a normal
+  // response, which was breaking Firestore's Listen channel and forcing the app "Offline"
+  // even when the internet connection was fine.
+  if (new URL(e.request.url).origin !== self.location.origin) return;
+
   if (isAppShellRequest(e.request)) {
     e.respondWith(
       fetch(e.request)
