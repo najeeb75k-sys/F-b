@@ -383,7 +383,11 @@
        where the previous one ended. */
     .print-block{margin-bottom:5px;}
     .print-group-row{font-family:Poppins,sans-serif;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:4px;margin-bottom:2px;break-inside:avoid;-webkit-column-break-inside:avoid;}
-    .print-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    .print-row{display:flex;gap:8px;font-size:12px;padding:2.5px 4px;border-bottom:1px solid #e2e7f0;break-inside:avoid;-webkit-column-break-inside:avoid;}
+    /* Fixed-width amount column + flexible label column so the divider between them lines up
+       straight down the page on every row, instead of hugging each row's text length. */
+    .print-row>span:first-child{flex:1;min-width:0;border-right:1px solid #b9c3d4;padding-right:10px;margin-right:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .print-row>span:last-child{flex:0 0 auto;width:98px;text-align:right;}
     .print-sub-row{padding-left:14px;color:#64748b;font-size:11px;}
     .print-summary-total{break-inside:avoid;margin-top:8px;padding:10px 14px;border:2px solid #122A4A;border-radius:6px;background:#eef2f8;font-weight:800;font-size:14.5px;text-align:center;line-height:1.7;}
   }
@@ -4503,11 +4507,11 @@ function printPage(id){
       const b=cr-dr;
       const st=PRINT_GROUP_STYLES[label];
       if(st)return `<div class="print-group-row" style="background:${st.bg};color:${st.color};">${st.icon} ${label} &nbsp;&nbsp; ${fmtSummary(Math.abs(b))} ${b>=0?'CR':'DR'}</div>`;
-      return `<div class="print-row" style="font-weight:700;color:#0f172a;"><span style="border-right:1px solid #94a3b8;padding-right:10px;">${label}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
+      return `<div class="print-row" style="font-weight:700;color:#0f172a;"><span>${label}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
     };
     const subRow=(name)=>{
       const b=m.net(name);
-      return `<div class="print-row print-sub-row" style="font-weight:700;color:#0f172a;"><span style="border-right:1px solid #94a3b8;padding-right:10px;">↳ ${name}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
+      return `<div class="print-row print-sub-row" style="font-weight:700;color:#0f172a;"><span>↳ ${name}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
     };
     let body='';
     m.top.forEach(t=>{body+=`<div class="print-block">${row(t.name,t.cr,t.dr)}</div>`;});
