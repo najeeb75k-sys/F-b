@@ -4363,12 +4363,12 @@ function renderSummary(){
 
   // Top-level row: either a fixed top account, or a group total (Personal / Party / Vehicle / Paid).
   const GROUP_STYLES={
-    'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
+    'Private Amanat':{bg:'#166534',color:'#fff',icon:'🔒'},
     'Paid Amanat':   {bg:'#0e7490',color:'#fff',icon:'🔐'},
     'Personal Account':{bg:'#5b3a8c',color:'#fff',icon:'👤'},
     'Party Account': {bg:'#a3620f',color:'#fff',icon:'🤝'},
     'Vehicle Account':{bg:'#0b6478',color:'#fff',icon:'🚛'},
-    'Paid Account':  {bg:'#8c2323',color:'#fff',icon:'📋'},
+    'Paid Baqaya':   {bg:'#8c2323',color:'#fff',icon:'📋'},
   };
   const topRowHtml=(label,cr,dr,detailNames)=>{
     const b=cr-dr;
@@ -4426,13 +4426,13 @@ function renderSummary(){
   // 1 & 2 — manually fixed top accounts (already single net balance each)
   m.top.forEach(t=>{html+=topRowHtml(t.name,t.cr,t.dr,null);});
   // 3 & 4 — Amanat (PA+Party+Vehicle credit accounts combined) and Paid Amanat (Paid credit accounts)
-  html+=amanatBlock('Amanat',m.amanatNames);
+  html+=amanatBlock('Private Amanat',m.amanatNames);
   html+=amanatBlock('Paid Amanat',m.paidAmanatNames);
   // 5-8 — one group per account type, showing only its debit-balance accounts (biggest debit first)
   html+=debitGroupBlock('Personal Account',m.groups.PA);
   html+=debitGroupBlock('Party Account',m.groups.PARTY);
   html+=debitGroupBlock('Vehicle Account',m.groups.V);
-  html+=debitGroupBlock('Paid Account',m.groups.P);
+  html+=debitGroupBlock('Paid Baqaya',m.groups.P);
   // 7 — totals
   html+=`<tr style="background:var(--primary);color:white;font-weight:700;">
     <td>TOTAL DEBIT: ${fmtSummary(tdr)} | TOTAL CREDIT: ${fmtSummary(tcr)}</td><td>${fmtSummary(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td><td class="no-print"></td>
@@ -4496,12 +4496,12 @@ function printPage(id){
       if(net>0)tcr+=net; else if(net<0)tdr+=-net;
     });
     const PRINT_GROUP_STYLES={
-      'Amanat':        {bg:'#166534',color:'#fff',icon:'🔒'},
+      'Private Amanat':{bg:'#166534',color:'#fff',icon:'🔒'},
       'Paid Amanat':   {bg:'#0e7490',color:'#fff',icon:'🔐'},
       'Personal Account':{bg:'#5b3a8c',color:'#fff',icon:'👤'},
       'Party Account': {bg:'#a3620f',color:'#fff',icon:'🤝'},
       'Vehicle Account':{bg:'#0b6478',color:'#fff',icon:'🚛'},
-      'Paid Account':  {bg:'#8c2323',color:'#fff',icon:'📋'},
+      'Paid Baqaya':   {bg:'#8c2323',color:'#fff',icon:'📋'},
     };
     const row=(label,cr,dr)=>{
       const b=cr-dr;
@@ -4528,12 +4528,12 @@ function printPage(id){
       debitNames.forEach(n=>{h+=subRow(n);});
       body+=`<div class="print-block">${h}</div>`;
     };
-    amanatBlock('Amanat',m.amanatNames);
+    amanatBlock('Private Amanat',m.amanatNames);
     amanatBlock('Paid Amanat',m.paidAmanatNames);
     debitGroupBlock('Personal Account',m.groups.PA);
     debitGroupBlock('Party Account',m.groups.PARTY);
     debitGroupBlock('Vehicle Account',m.groups.V);
-    debitGroupBlock('Paid Account',m.groups.P);
+    debitGroupBlock('Paid Baqaya',m.groups.P);
     // Total is added as the LAST item inside the same column flow (not a separate block after
     // it) so it fills into whatever space is left at the bottom of the last column instead of
     // always jumping to a fresh, mostly-empty page.
