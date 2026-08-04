@@ -146,8 +146,10 @@
   .btn-primary:hover{background:var(--primary-light);box-shadow:0 4px 12px rgba(15,43,77,.3);transform:translateY(-1px);}
   .btn-success{background:var(--success);color:white;}
   .btn-success:hover{filter:brightness(1.08);transform:translateY(-1px);}
-  .btn-danger{background:var(--danger);color:white;}
-  .btn-danger:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  .btn-danger{background:var(--danger);color:white;box-shadow:0 1px 2px rgba(191,65,65,.25);}
+  .btn-danger:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 4px 12px rgba(191,65,65,.32);}
+  .btn:active{transform:translateY(0)!important;}
+  .btn:focus-visible{outline:2px solid var(--primary-light);outline-offset:2px;}
   .btn-warning{background:var(--warning);color:white;}
   .btn-outline{background:transparent;border:1.5px solid var(--primary);color:var(--primary);}
   .btn-outline:hover{background:var(--primary);color:white;}
@@ -266,6 +268,43 @@
   #cashbookBody tr, #tpEntryBody tr{transition:background .12s ease;}
   #cashbookBody tr:hover td{background:#f7f9fc;}
   #cashbookBody tr:hover td.cbcell input:focus{background:#eff5ff;}
+
+  /* ===== Entry pages (Cashbook & Party/Paid Entry) — professional toolbar, ledger tint, totals ===== */
+  .entry-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--bg-light);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px;}
+  .entry-toolbar .srch-wrap{min-width:170px;}
+  .entry-toolbar .input{background:#fff;}
+  .entry-toolbar-divider{width:1px;align-self:stretch;background:var(--border);margin:2px 1px;}
+  @media(max-width:600px){.entry-toolbar-divider{display:none;}}
+
+  .entry-hint{display:flex;gap:9px;align-items:flex-start;background:linear-gradient(135deg,rgba(31,77,133,.06),rgba(31,77,133,.02));border:1px solid rgba(31,77,133,.14);border-left:3px solid var(--primary-light);border-radius:9px;padding:10px 13px;font-size:11.5px;line-height:1.65;color:var(--text-light);margin-bottom:14px;}
+  .entry-hint .eh-ic{font-size:14px;flex-shrink:0;margin-top:1px;}
+
+  /* Ledger-style column tint layered on top of the existing colored text, like a real accounting sheet */
+  td.cbcell.cb-debit{background:rgba(191,65,65,.045);}
+  td.cbcell.cb-credit{background:rgba(28,122,76,.045);}
+  td.cbcell.cb-profit{background:rgba(147,51,234,.045);}
+  td.cbcell.cb-tp{background:rgba(29,78,216,.045);}
+
+  /* Subtle zebra banding so long entry lists stay easy to scan */
+  #cashbookBody tr:nth-child(even) td, #tpEntryBody tr:nth-child(even) td{background-color:#fbfcfe;}
+  #cashbookBody tr:nth-child(even) td.cbcell.cb-debit, #tpEntryBody tr:nth-child(even) td.cbcell.cb-debit{background-color:rgba(191,65,65,.06);}
+  #cashbookBody tr:nth-child(even) td.cbcell.cb-credit, #tpEntryBody tr:nth-child(even) td.cbcell.cb-credit{background-color:rgba(28,122,76,.06);}
+  #tpEntryBody tr:nth-child(even) td.cbcell.cb-profit{background-color:rgba(147,51,234,.065);}
+  #tpEntryBody tr:nth-child(even) td.cbcell.cb-tp{background-color:rgba(29,78,216,.065);}
+
+  /* Slightly richer header on the two entry tables specifically */
+  #page-autoEntry thead, #page-tpEntry thead{background:linear-gradient(180deg,var(--primary),var(--primary-dark));}
+
+  /* Totals footer as a proper summary strip of chips instead of a plain line of text */
+  .entry-totals-bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+  .et-chip{background:var(--bg-light);border:1px solid var(--border);border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;color:var(--text-dark);display:inline-flex;align-items:center;gap:6px;}
+  .et-chip .et-label{font-weight:600;color:var(--text-light);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;}
+  .et-chip.et-debit{border-color:rgba(191,65,65,.28);color:#bf4141;}
+  .et-chip.et-credit{border-color:rgba(28,122,76,.28);color:#1c7a4c;}
+  .et-chip.et-profit{border-color:rgba(147,51,234,.28);color:#9333ea;}
+  .et-chip.et-tp{border-color:rgba(29,78,216,.28);color:#1d4ed8;}
+  .et-chip.et-balance-ok{border-color:rgba(22,163,74,.35);background:rgba(22,163,74,.07);color:#16a34a;}
+  .et-chip.et-balance-bad{border-color:rgba(220,38,38,.35);background:rgba(220,38,38,.07);color:#dc2626;}
 
   @media(max-width:768px){
     .stats-grid{grid-template-columns:repeat(2,1fr);}
@@ -498,20 +537,22 @@
           <div class="bismillah-tag"><div class="bismillah-text-sm">بِسْمِ اللَّهِ الرَّحْمٰنِ الرَّحِيمِ</div><div class="bismillah-tag-translation">شروع اللہ کے نام سے جو بڑا مہربان، نہایت رحم والا ہے</div></div>
           <div class="card-header">
             <span class="card-title" data-i18n="cashbookNewEntries">📒 Cashbook</span>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
-              <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="cbSearch" placeholder="Account / ref search..." oninput="renderCashbook()"></div>
-              <input type="date" id="cbFrom" class="input" style="width:130px;" onchange="renderCashbook()" title="From date">
-              <input type="date" id="cbTo" class="input" style="width:130px;" onchange="renderCashbook()" title="To date">
-              <button class="btn btn-outline btn-sm" onclick="cbClear()">↺ Clear Filter</button>
-              <input type="number" id="cbBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
-              <button class="btn btn-gold btn-sm" onclick="cbAddBulkRows()">➕ Add Rows</button>
-              <button class="btn btn-outline btn-sm" onclick="cbRefreshAllDescriptions()" title="Purani sari entries ki description naye tareeqe se dobara bana dega">🔄 Refresh Descriptions</button>
-              <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
-            </div>
           </div>
-          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
-            ✏️ Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
+          <div class="entry-toolbar no-print">
+            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="cbSearch" placeholder="Account / ref search..." oninput="renderCashbook()"></div>
+            <input type="date" id="cbFrom" class="input" style="width:130px;" onchange="renderCashbook()" title="From date">
+            <input type="date" id="cbTo" class="input" style="width:130px;" onchange="renderCashbook()" title="To date">
+            <button class="btn btn-outline btn-sm" onclick="cbClear()">↺ Clear Filter</button>
+            <div class="entry-toolbar-divider"></div>
+            <input type="number" id="cbBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
+            <button class="btn btn-gold btn-sm" onclick="cbAddBulkRows()">➕ Add Rows</button>
+            <button class="btn btn-outline btn-sm" onclick="cbRefreshAllDescriptions()" title="Purani sari entries ki description naye tareeqe se dobara bana dega">🔄 Refresh Descriptions</button>
+            <div class="entry-toolbar-divider"></div>
+            <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
           </div>
+          <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
+            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
+          </span></div>
           <div class="tbl-wrap">
             <table style="table-layout:fixed;min-width:920px;">
               <colgroup>
@@ -544,7 +585,7 @@
               <tbody id="cashbookBody"></tbody>
             </table>
           </div>
-          <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="cashbookTotals"></div>
+          <div class="entry-totals-bar" id="cashbookTotals"></div>
         </div>
       </div>
 
@@ -554,15 +595,17 @@
           <div class="bismillah-tag"><div class="bismillah-text-sm">بِسْمِ اللَّهِ الرَّحْمٰنِ الرَّحِيمِ</div><div class="bismillah-tag-translation">شروع اللہ کے نام سے جو بڑا مہربان، نہایت رحم والا ہے</div></div>
           <div class="card-header">
             <span class="card-title">⚖️ Party & Paid Entry</span>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" class="no-print">
-              <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="tpSearch" placeholder="Account / ref search..." oninput="renderTpEntries()"></div>
-              <input type="date" id="tpFrom" class="input" style="width:130px;" onchange="renderTpEntries()" title="From date">
-              <input type="date" id="tpTo" class="input" style="width:130px;" onchange="renderTpEntries()" title="To date">
-              <button class="btn btn-outline btn-sm" onclick="tpClear()">↺ Clear Filter</button>
-              <input type="number" id="tpBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
-              <button class="btn btn-gold btn-sm" onclick="tpAddBulkRows()">➕ Add Rows</button>
-              <button class="btn btn-primary btn-sm" onclick="printTp()">🖨️ Print</button>
-            </div>
+          </div>
+          <div class="entry-toolbar no-print">
+            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="tpSearch" placeholder="Account / ref search..." oninput="renderTpEntries()"></div>
+            <input type="date" id="tpFrom" class="input" style="width:130px;" onchange="renderTpEntries()" title="From date">
+            <input type="date" id="tpTo" class="input" style="width:130px;" onchange="renderTpEntries()" title="To date">
+            <button class="btn btn-outline btn-sm" onclick="tpClear()">↺ Clear Filter</button>
+            <div class="entry-toolbar-divider"></div>
+            <input type="number" id="tpBulkRowCount" class="input" style="width:80px;" placeholder="Number" min="1">
+            <button class="btn btn-gold btn-sm" onclick="tpAddBulkRows()">➕ Add Rows</button>
+            <div class="entry-toolbar-divider"></div>
+            <button class="btn btn-primary btn-sm" onclick="printTp()">🖨️ Print</button>
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;" class="no-print">
             <span style="font-weight:700;font-size:13px;color:#7e22ce;">💰 Profit Account:</span>
@@ -571,9 +614,9 @@
             </select>
             <span style="font-size:11px;color:var(--text-light);">Har row ka Profit amount isi account mein jama hoga</span>
           </div>
-          <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
-            ✏️ Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 4 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama) aur TP Account (Jama).
-          </div>
+          <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
+            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 4 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama) aur TP Account (Jama).
+          </span></div>
           <div class="tbl-wrap">
             <table style="table-layout:fixed;min-width:1180px;">
               <colgroup>
@@ -609,7 +652,7 @@
               <tbody id="tpEntryBody"></tbody>
             </table>
           </div>
-          <div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--primary);" id="tpEntryTotals"></div>
+          <div class="entry-totals-bar" id="tpEntryTotals"></div>
         </div>
       </div>
 
@@ -2396,7 +2439,7 @@ function renderCashbook(){
 
   if(!rows.length){
     tbody.innerHTML='<tr><td colspan="12" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
-    document.getElementById('cashbookTotals').textContent='';
+    document.getElementById('cashbookTotals').innerHTML='';
     return;
   }
 
@@ -2445,9 +2488,13 @@ function renderCashbook(){
   const allEntries=rows.flatMap(r=>[r.dr,r.cr]).filter(Boolean);
   const tdr=allEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   const tcr=allEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-  document.getElementById('cashbookTotals').textContent=(q||fr||to)
-    ? (rows.length+' rows | Baqaya: '+fmt(tdr)+' | Jama: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr)))
-    : ('Baqaya: '+fmt(tdr)+' | Jama: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr)));
+  const cbBal=Math.abs(tcr-tdr);
+  const cbBalCls=cbBal<0.005?'et-balance-ok':'et-balance-bad';
+  document.getElementById('cashbookTotals').innerHTML=
+    (q||fr||to ? `<span class="et-chip"><span class="et-label">Rows</span>${rows.length}</span>` : '')
+    +`<span class="et-chip et-debit"><span class="et-label">Baqaya</span>${fmt(tdr)}</span>`
+    +`<span class="et-chip et-credit"><span class="et-label">Jama</span>${fmt(tcr)}</span>`
+    +`<span class="et-chip ${cbBalCls}"><span class="et-label">Balance</span>${fmt(cbBal)}</span>`;
 }
 
 // Auto-generated cashbook description — replaces the old single shared-text-box approach.
@@ -2631,7 +2678,11 @@ function cbUpdateTotalsOnly(){
   const tcr=entries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const totalsEl=document.getElementById('cashbookTotals');
   if(!totalsEl)return;
-  totalsEl.textContent='Baqaya: '+fmt(tdr)+' | Jama: '+fmt(tcr)+' | Balance: '+fmt(Math.abs(tcr-tdr));
+  const bal=Math.abs(tcr-tdr);
+  const balCls=bal<0.005?'et-balance-ok':'et-balance-bad';
+  totalsEl.innerHTML=`<span class="et-chip et-debit"><span class="et-label">Baqaya</span>${fmt(tdr)}</span>`
+    +`<span class="et-chip et-credit"><span class="et-label">Jama</span>${fmt(tcr)}</span>`
+    +`<span class="et-chip ${balCls}"><span class="et-label">Balance</span>${fmt(bal)}</span>`;
 }
 
 // Keeps a Cashbook row's linked Paid Account ledger entry in sync: exactly ONE side of the row
@@ -3092,7 +3143,7 @@ function renderTpEntries(){
   if(!tbody)return;
   if(!rows.length){
     tbody.innerHTML='<tr><td colspan="13" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
-    document.getElementById('tpEntryTotals').textContent='';
+    document.getElementById('tpEntryTotals').innerHTML='';
     return;
   }
 
@@ -3129,9 +3180,13 @@ function tpUpdateTotalsOnly(rowCount,filtered){
   // Balance = Party Baqaya minus everything it should have been split into (Paid + Profit + TP).
   // Should be 0 when every row is fully accounted for — non-zero shows the farq (difference).
   const balance=tDebit-(tCredit+tProfit+tTp);
-  const balColor=Math.abs(balance)<0.005 ? '#16a34a' : '#dc2626';
-  const base='Baqaya: '+fmt(tDebit)+' | Jama: '+fmt(tCredit)+' | Profit: '+fmt(tProfit)+' | TP: '+fmt(tTp)+' | <span style="color:'+balColor+'">Balance: '+fmt(balance)+'</span>';
-  el.innerHTML=filtered ? (rowCount+' rows | '+base) : base;
+  const balCls=Math.abs(balance)<0.005 ? 'et-balance-ok' : 'et-balance-bad';
+  el.innerHTML=(filtered ? `<span class="et-chip"><span class="et-label">Rows</span>${rowCount}</span>` : '')
+    +`<span class="et-chip et-debit"><span class="et-label">Baqaya</span>${fmt(tDebit)}</span>`
+    +`<span class="et-chip et-credit"><span class="et-label">Jama</span>${fmt(tCredit)}</span>`
+    +`<span class="et-chip et-profit"><span class="et-label">Profit</span>${fmt(tProfit)}</span>`
+    +`<span class="et-chip et-tp"><span class="et-label">TP</span>${fmt(tTp)}</span>`
+    +`<span class="et-chip ${balCls}"><span class="et-label">Balance</span>${fmt(balance)}</span>`;
 }
 
 function tpFieldChange(el){
