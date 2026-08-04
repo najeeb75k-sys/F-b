@@ -1650,6 +1650,10 @@ function saveLang(){
   cfg.lang=sel.value;save();applyLanguage();toast('Language updated! ✅','success');
 }
 function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});}
+// Same as fmt(), but drops a trailing ".00" for whole-number amounts (keeps real paisa/cents if
+// the amount actually has them) — used only in the Summary report (screen + print), since that's
+// where the extra ".00" on every line was just visual clutter.
+function fmtSummary(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:2});}
 function today(){return new Date().toISOString().split('T')[0];}
 function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
 function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
@@ -4341,13 +4345,13 @@ function renderSummary(){
     const net=v.cr-v.dr;
     if(net>0)tcr+=net; else if(net<0)tdr+=-net;
   });
-  document.getElementById('sum_cr').textContent=fmt(tcr);
-  document.getElementById('sum_dr').textContent=fmt(tdr);
-  document.getElementById('sum_bal').textContent=fmt(Math.abs(tcr-tdr));
+  document.getElementById('sum_cr').textContent=fmtSummary(tcr);
+  document.getElementById('sum_dr').textContent=fmtSummary(tdr);
+  document.getElementById('sum_bal').textContent=fmtSummary(Math.abs(tcr-tdr));
   document.getElementById('sum_count').textContent=data.length;
   // Total Balance (All Accounts) — every account's own balance added together as a magnitude
   // (not netted against each other like Net Balance above), so it reflects the true combined size.
-  document.getElementById('sum_totalbal').textContent=fmt(tcr+tdr);
+  document.getElementById('sum_totalbal').textContent=fmtSummary(tcr+tdr);
   document.getElementById('printCoSum').textContent=cfg.company;
   document.getElementById('printDateSum').textContent='Summary Report | '+new Date().toLocaleDateString('en-PK');
 
@@ -4373,7 +4377,7 @@ function renderSummary(){
           <div style="background:${st.bg};color:${st.color};padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:8px;margin:6px 0;">
             <span style="font-family:Poppins,sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px;">${st.icon} ${label}</span>
             <div style="display:flex;align-items:center;gap:12px;">
-              <span style="font-size:15px;font-weight:800;">${fmt(Math.abs(b))} <span style="font-size:11px;opacity:.85;">${b>=0?'CR':'DR'}</span></span>
+              <span style="font-size:15px;font-weight:800;">${fmtSummary(Math.abs(b))} <span style="font-size:11px;opacity:.85;">${b>=0?'CR':'DR'}</span></span>
               <span class="no-print">${detailBtn}</span>
             </div>
           </div>
@@ -4382,7 +4386,7 @@ function renderSummary(){
     }
     return `<tr style="background:#eef2f8;">
       <td style="font-weight:700;color:#0f172a;">${label}</td>
-      <td style="font-weight:700;text-align:center;color:#0f172a;">${fmt(Math.abs(b))} <span style="font-size:11px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></td>
+      <td style="font-weight:700;text-align:center;color:#0f172a;">${fmtSummary(Math.abs(b))} <span style="font-size:11px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></td>
       <td class="no-print" style="text-align:center;">${detailBtn}</td>
     </tr>`;
   };
@@ -4392,7 +4396,7 @@ function renderSummary(){
     const b=m.net(name);
     return `<tr class="summary-sub-row">
       <td style="padding-left:32px;color:#0f172a;font-weight:700;font-size:13px;">↳ ${name}</td>
-      <td style="font-size:13px;font-weight:700;text-align:center;color:#0f172a;">${fmt(Math.abs(b))} <span style="font-size:11px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></td>
+      <td style="font-size:13px;font-weight:700;text-align:center;color:#0f172a;">${fmtSummary(Math.abs(b))} <span style="font-size:11px;font-weight:700;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></td>
       <td class="no-print" style="text-align:center;"><button class="btn btn-sm btn-outline" onclick="openAccDetail(${JSON.stringify(name)})">📄</button></td>
     </tr>`;
   };
@@ -4427,7 +4431,7 @@ function renderSummary(){
   html+=debitGroupBlock('Paid Account',m.groups.P);
   // 7 — totals
   html+=`<tr style="background:var(--primary);color:white;font-weight:700;">
-    <td>TOTAL DEBIT: ${fmt(tdr)} | TOTAL CREDIT: ${fmt(tcr)}</td><td>${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td><td class="no-print"></td>
+    <td>TOTAL DEBIT: ${fmtSummary(tdr)} | TOTAL CREDIT: ${fmtSummary(tcr)}</td><td>${fmtSummary(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</td><td class="no-print"></td>
   </tr>`;
   tbody.innerHTML=html;
 }
@@ -4498,12 +4502,12 @@ function printPage(id){
     const row=(label,cr,dr)=>{
       const b=cr-dr;
       const st=PRINT_GROUP_STYLES[label];
-      if(st)return `<div class="print-group-row" style="background:${st.bg};color:${st.color};">${st.icon} ${label} &nbsp;&nbsp; ${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</div>`;
-      return `<div class="print-row" style="font-weight:700;"><span>${label}</span><span>${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span></div>`;
+      if(st)return `<div class="print-group-row" style="background:${st.bg};color:${st.color};">${st.icon} ${label} &nbsp;&nbsp; ${fmtSummary(Math.abs(b))} ${b>=0?'CR':'DR'}</div>`;
+      return `<div class="print-row" style="font-weight:700;color:#0f172a;"><span style="border-right:1px solid #94a3b8;padding-right:10px;">${label}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
     };
     const subRow=(name)=>{
       const b=m.net(name);
-      return `<div class="print-row print-sub-row"><span>↳ ${name}</span><span>${fmt(Math.abs(b))} ${b>=0?'CR':'DR'}</span></div>`;
+      return `<div class="print-row print-sub-row" style="font-weight:700;color:#0f172a;"><span style="border-right:1px solid #94a3b8;padding-right:10px;">↳ ${name}</span><span>${fmtSummary(Math.abs(b))} <span style="font-size:10px;color:${b>=0?'#15803d':'#dc2626'};">${b>=0?'CR':'DR'}</span></span></div>`;
     };
     let body='';
     m.top.forEach(t=>{body+=`<div class="print-block">${row(t.name,t.cr,t.dr)}</div>`;});
@@ -4529,7 +4533,7 @@ function printPage(id){
     // Total is added as the LAST item inside the same column flow (not a separate block after
     // it) so it fills into whatever space is left at the bottom of the last column instead of
     // always jumping to a fresh, mostly-empty page.
-    body+=`<div class="print-summary-total">TOTAL DEBIT: ${fmt(tdr)}<br>TOTAL CREDIT: ${fmt(tcr)}<br>BALANCE: ${fmt(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</div>`;
+    body+=`<div class="print-summary-total">TOTAL DEBIT: ${fmtSummary(tdr)}<br>TOTAL CREDIT: ${fmtSummary(tcr)}<br>BALANCE: ${fmtSummary(Math.abs(tcr-tdr))} ${tcr>=tdr?'CR':'DR'}</div>`;
     // Natural sequential order: everything one after another, exactly like the on-screen list.
     // CSS multi-column (column-fill:auto) fills the first column completely top-to-bottom,
     // then continues into the second column, then automatically moves to the next printed
