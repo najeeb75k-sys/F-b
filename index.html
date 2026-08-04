@@ -186,6 +186,13 @@
   .input:focus,.sel:focus{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(31,77,133,.12);}
 
   .tbl-wrap{overflow-x:auto;border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-sm);}
+  /* Cashbook / Party&Paid / Opening-Balance entry grids: bounded height so (1) the header row
+     stays visible while scrolling down through entries, and (2) the horizontal scrollbar sits
+     right at the bottom of this box — always on-screen — instead of at the bottom of a possibly
+     very long page that you'd have to scroll all the way down to reach. */
+  .tbl-wrap-scroll{max-height:66vh;overflow-y:auto;}
+  .tbl-wrap-scroll table thead th{position:sticky;top:0;z-index:5;background:var(--primary);color:#fff;}
+  #page-tpEntry .tbl-wrap-scroll table thead th{background:linear-gradient(180deg,var(--primary),var(--primary-dark));}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   thead{background:var(--primary);color:white;}
   th{padding:12px 13px;text-align:left;font-weight:700;white-space:nowrap;border-right:1px solid rgba(255,255,255,0.1);border-bottom:2px solid rgba(255,255,255,0.1);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;}
@@ -553,7 +560,7 @@
           <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
             Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
           </span></div>
-          <div class="tbl-wrap">
+          <div class="tbl-wrap tbl-wrap-scroll" id="cashbookScrollWrap">
             <table style="table-layout:fixed;min-width:920px;">
               <colgroup>
                 <col style="width:34px;">
@@ -617,7 +624,7 @@
           <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
             Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 4 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama) aur TP Account (Jama).
           </span></div>
-          <div class="tbl-wrap">
+          <div class="tbl-wrap tbl-wrap-scroll" id="tpScrollWrap">
             <table style="table-layout:fixed;min-width:1180px;">
               <colgroup>
                 <col style="width:34px;">
@@ -670,7 +677,7 @@
           <div style="font-size:11px;color:var(--text-light);margin-bottom:8px;" class="no-print">
             ✏️ Sirf pehli baar apne register ka <b>starting/opening balance</b> yahan daalne ke liye. Account ka naam type karein — agar woh <b>Accounts List</b> ya <b>Paid Accounts</b> mein pehle se hai to seedha wahan chala jayega, warna <b>khud-bakhud naya account ban jayega</b> (agar Paid No diya ho to Paid Account, warna normal account). Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai.
           </div>
-          <div class="tbl-wrap">
+          <div class="tbl-wrap tbl-wrap-scroll" id="obScrollWrap">
             <table style="table-layout:fixed;min-width:980px;">
               <colgroup>
                 <col style="width:34px;">
@@ -1753,9 +1760,9 @@ function showPage(id,el){
   if(el) el.classList.add('active');
   closeSidebar();
   if(id==='dashboard')refreshDash();
-  if(id==='autoEntry'){renderCashbook();}
-  if(id==='tpEntry'){renderTpEntries();}
-  if(id==='obEntry'){renderObEntries();}
+  if(id==='autoEntry'){renderCashbook();gridRestoreScroll('cashbookScrollWrap','cargo_cb_scrollpos');}
+  if(id==='tpEntry'){renderTpEntries();gridRestoreScroll('tpScrollWrap','cargo_tp_scrollpos');}
+  if(id==='obEntry'){renderObEntries();gridRestoreScroll('obScrollWrap','cargo_ob_scrollpos');}
   if(id==='accounts')renderAccounts();
   if(id==='summary')renderSummary();
   if(id==='backup'){renderRecycleBin();renderLastLogin();}
@@ -2246,7 +2253,11 @@ function printAccDetail(){
 const CB_MIN_ROWS=15;
 let cbBlankPool=[]; // stable temp pairIds for not-yet-saved blank rows, so drag-fill / re-render don't lose them
 let cbPendingDates={}; // pairId -> date, for blank rows that have a date set but no entry yet
-let cbDesiredBlankCount=CB_MIN_ROWS; // grows when user presses Enter past the last row; never auto-shrinks below CB_MIN_ROWS
+// grows when user presses Enter past the last row; never auto-shrinks below CB_MIN_ROWS.
+// Persisted to localStorage so blank rows the user opened up (but hasn't filled yet) survive
+// closing/reopening the app instead of collapsing back to CB_MIN_ROWS every time.
+let cbDesiredBlankCount=DB.get('cargo_cb_blankcount',CB_MIN_ROWS);
+function cbSaveBlankCounts(){DB.set('cargo_cb_blankcount',cbDesiredBlankCount);}
 let cbRemoteRenderPending=false; // a cloud-sync update arrived while the user was typing in the grid; redraw once they leave it
 let cbFocusGuardAttached=false;
 
@@ -2256,6 +2267,31 @@ function cbHasActiveFocus(){
   const el=document.activeElement;
   const tbody=document.getElementById('cashbookBody');
   return !!(el && tbody && tbody.contains(el));
+}
+
+// ---- Scroll-position memory for the big entry grids (Cashbook / Party&Paid / Opening Balance) ----
+// Remembers each grid's scroll position (vertical + horizontal) across page switches / app
+// reopens, so you come back to roughly where your last entry was instead of the very top every time.
+const gridScrollBound={};
+function gridBindScrollMemory(wrapId,storeKey){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap||gridScrollBound[wrapId])return;
+  gridScrollBound[wrapId]=true;
+  let t=null;
+  wrap.addEventListener('scroll',()=>{
+    clearTimeout(t);
+    t=setTimeout(()=>{DB.set(storeKey,{top:wrap.scrollTop,left:wrap.scrollLeft});},200);
+  },{passive:true});
+}
+function gridRestoreScroll(wrapId,storeKey){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return;
+  gridBindScrollMemory(wrapId,storeKey);
+  const pos=DB.get(storeKey,null);
+  requestAnimationFrame(()=>{
+    if(pos){wrap.scrollTop=pos.top||0;wrap.scrollLeft=pos.left||0;}
+    else{wrap.scrollTop=wrap.scrollHeight;} // first time ever: jump near the bottom, where new/blank rows live
+  });
 }
 
 function cbAttachFocusGuard(){
@@ -2303,6 +2339,7 @@ function cbEnsureMinRows(rows){
   // Reuses a stable pool of temp pairIds across renders so drag-fill and typing don't shuffle row identity.
   const realCount=rows.length;
   if(cbDesiredBlankCount<CB_MIN_ROWS)cbDesiredBlankCount=CB_MIN_ROWS;
+  cbSaveBlankCounts();
   const blanksNeeded=Math.max(0,cbDesiredBlankCount-realCount);
   // A pool id that has just turned into a real row (got its first entry) must be dropped from the
   // pool — otherwise it gets handed out again to the next blank row, and that next row's edits would
@@ -2646,15 +2683,22 @@ function cbFieldChange(el){
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     cbUpsertField(pid,side,field,value);
     cbSyncPaidLink(pid);
-    // Baqaya amount → auto-mirror into this row's Jama amount (only if Jama hasn't been
-    // manually typed already), since a cashbook row is almost always a matched debit=credit pair.
-    if(side==='dr' && field==='amount' && value){
-      const crEntry=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
-      if(!crEntry || !crEntry.amount){
-        cbUpsertField(pid,'cr','amount',value);
+    // Baqaya amount aur Jama amount hamesha ek dusre ke barabar rakhte hain (ek row = ek balanced
+    // transaction) — chahe pehli dafa likha ja raha ho ya baad mein value change ki ja rahi ho.
+    if((side==='dr'||side==='cr') && field==='amount'){
+      const otherSide=side==='dr'?'cr':'dr';
+      const otherEntry=entries.find(e=>(e.pairId||e.id)===pid && e.type===(otherSide==='dr'?'DR':'CR'));
+      const otherVal=otherEntry?otherEntry.amount:0;
+      // Mirror hamesha karo jab tak dusri taraf ki value pehle se is taraf ki purani value se match
+      // na kare (matlab user ne wahan jaan-boojh kar alag amount nahi likha) — yani khali ho, ya
+      // is naye amount ke barabar ho, ya (Enter/blur se pehle) abhi tak is row ka koi sirf-ek-taraf
+      // wala manual override na hua ho. Simplify: bas hamesha mirror karo — cashbook row mein
+      // Baqaya/Jama alag hona shayad hi kabhi maqsad hota hai.
+      if(String(otherVal||'')!==String(value||'')){
+        cbUpsertField(pid,otherSide,'amount',value);
         cbSyncPaidLink(pid);
-        const crInput=cbFindInput(pid,'cr','amount');
-        if(crInput)crInput.value=value;
+        const otherInput=cbFindInput(pid,otherSide,'amount');
+        if(otherInput)otherInput.value=value;
       }
     }
   }
@@ -2777,25 +2821,22 @@ function cbKeyHandler(ev,el,isLastRow){
 
   if(ev.key==='Enter'){
     ev.preventDefault();
-    el.blur();
+    el.blur(); // synchronous — cbFieldChange has already run by the time this line finishes
     if(isLastRow){
       // Enter on the last row → guarantee a new blank row appears beneath, no save button needed
       cbDesiredBlankCount++;
-      setTimeout(()=>{
-        renderCashbook();
-        const allRows=document.querySelectorAll('#cashbookBody tr');
-        const newRow=allRows[allRows.length-1];
-        if(newRow){
-          const dateInput=newRow.querySelector('input[data-field="date"]');
-          if(dateInput)dateInput.focus();
-        }
-      },10);
+      cbSaveBlankCounts();
+      renderCashbook();
+      const allRows=document.querySelectorAll('#cashbookBody tr');
+      const newRow=allRows[allRows.length-1];
+      if(newRow){
+        const dateInput=newRow.querySelector('input[data-field="date"]');
+        if(dateInput)dateInput.focus();
+      }
     }else{
       // Enter on any other row → move straight down to the same field in the next row (Excel-style)
-      setTimeout(()=>{
-        const newPids=cbGetRowPids();
-        cbFocusCell(newPids[rowIdx+1],colIdx);
-      },10);
+      const newPids=cbGetRowPids();
+      cbFocusCell(newPids[rowIdx+1],colIdx);
     }
     return;
   }
@@ -2805,9 +2846,9 @@ function cbKeyHandler(ev,el,isLastRow){
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      setTimeout(()=>{const newPids=cbGetRowPids();cbFocusCell(newPids[rowIdx+1],colIdx);},10);
+      const newPids=cbGetRowPids();cbFocusCell(newPids[rowIdx+1],colIdx);
     }else if(ev.key==='ArrowUp'){
-      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pids[rowIdx-1],colIdx),10);}
+      if(rowIdx>0){ev.preventDefault();el.blur();cbFocusCell(pids[rowIdx-1],colIdx);}
     }
     return;
   }
@@ -2817,10 +2858,10 @@ function cbKeyHandler(ev,el,isLastRow){
   if(hasDatalist){
     if(ev.key==='ArrowRight'){
       let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
-      if(atEdge && colIdx<CB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pid,colIdx+1),10);}
+      if(atEdge && colIdx<CB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();cbFocusCell(pid,colIdx+1);}
     }else if(ev.key==='ArrowLeft'){
       let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
-      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>cbFocusCell(pid,colIdx-1),10);}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();cbFocusCell(pid,colIdx-1);}
     }
     return;
   }
@@ -2828,15 +2869,13 @@ function cbKeyHandler(ev,el,isLastRow){
   if(ev.key==='ArrowDown'){
     ev.preventDefault();
     el.blur();
-    setTimeout(()=>{
-      const newPids=cbGetRowPids();
-      cbFocusCell(newPids[rowIdx+1],colIdx);
-    },10);
+    const newPids=cbGetRowPids();
+    cbFocusCell(newPids[rowIdx+1],colIdx);
   }else if(ev.key==='ArrowUp'){
     if(rowIdx>0){
       ev.preventDefault();
       el.blur();
-      setTimeout(()=>cbFocusCell(pids[rowIdx-1],colIdx),10);
+      cbFocusCell(pids[rowIdx-1],colIdx);
     }
   }else if(ev.key==='ArrowRight'){
     // only move to next cell when caret is at the end of the text (so normal text editing still works)
@@ -2846,7 +2885,7 @@ function cbKeyHandler(ev,el,isLastRow){
       if(colIdx<CB_FIELD_ORDER.length-1){
         ev.preventDefault();
         el.blur();
-        setTimeout(()=>cbFocusCell(pid,colIdx+1),10);
+        cbFocusCell(pid,colIdx+1);
       }
     }
   }else if(ev.key==='ArrowLeft'){
@@ -2856,7 +2895,7 @@ function cbKeyHandler(ev,el,isLastRow){
       if(colIdx>0){
         ev.preventDefault();
         el.blur();
-        setTimeout(()=>cbFocusCell(pid,colIdx-1),10);
+        cbFocusCell(pid,colIdx-1);
       }
     }
   }
@@ -2957,7 +2996,8 @@ function cbDragEnd(){
 const TP_MIN_ROWS=15;
 let tpBlankPool=[];
 let tpPendingDates={};
-let tpDesiredBlankCount=TP_MIN_ROWS;
+let tpDesiredBlankCount=DB.get('cargo_tp_blankcount',TP_MIN_ROWS);
+function tpSaveBlankCounts(){DB.set('cargo_tp_blankcount',tpDesiredBlankCount);}
 let tpRemoteRenderPending=false;
 let tpFocusGuardAttached=false;
 const TP_FIELD_ORDER=['date','party','debit','refNo','paid','credit','paidNo','weightStation','profit','tpAcc','tpAmount'];
@@ -2995,6 +3035,7 @@ function tpAddBulkRows(){
 function tpEnsureMinRows(rows){
   const realCount=rows.length;
   if(tpDesiredBlankCount<TP_MIN_ROWS)tpDesiredBlankCount=TP_MIN_ROWS;
+  tpSaveBlankCounts();
   const blanksNeeded=Math.max(0,tpDesiredBlankCount-realCount);
   const realIds=new Set(rows.map(r=>r.id));
   tpBlankPool=tpBlankPool.filter(id=>{
@@ -3292,47 +3333,46 @@ function tpKeyHandler(ev,el,isLastRow){
     el.blur();
     if(isLastRow){
       tpDesiredBlankCount++;
-      setTimeout(()=>{
-        renderTpEntries();
-        const allRows=document.querySelectorAll('#tpEntryBody tr');
-        const newRow=allRows[allRows.length-1];
-        if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
-      },10);
+      tpSaveBlankCounts();
+      renderTpEntries();
+      const allRows=document.querySelectorAll('#tpEntryBody tr');
+      const newRow=allRows[allRows.length-1];
+      if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
     }else{
-      setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+      const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
     }
     return;
   }
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+      const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
     }else if(ev.key==='ArrowUp'){
-      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rids[rowIdx-1],colIdx),10);}
+      if(rowIdx>0){ev.preventDefault();el.blur();tpFocusCell(rids[rowIdx-1],colIdx);}
     }
     return;
   }
   if(hasDatalist){
     if(ev.key==='ArrowRight'){
       let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
-      if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx+1),10);}
+      if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();tpFocusCell(rid,colIdx+1);}
     }else if(ev.key==='ArrowLeft'){
       let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
-      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx-1),10);}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();tpFocusCell(rid,colIdx-1);}
     }
     return;
   }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
-    setTimeout(()=>{const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);},10);
+    const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
   }else if(ev.key==='ArrowUp'){
-    if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rids[rowIdx-1],colIdx),10);}
+    if(rowIdx>0){ev.preventDefault();el.blur();tpFocusCell(rids[rowIdx-1],colIdx);}
   }else if(ev.key==='ArrowRight'){
     let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
-    if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx+1),10);}
+    if(atEdge && colIdx<TP_FIELD_ORDER.length-1){ev.preventDefault();el.blur();tpFocusCell(rid,colIdx+1);}
   }else if(ev.key==='ArrowLeft'){
     let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
-    if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>tpFocusCell(rid,colIdx-1),10);}
+    if(atStart && colIdx>0){ev.preventDefault();el.blur();tpFocusCell(rid,colIdx-1);}
   }
 }
 
@@ -3472,7 +3512,8 @@ function printTp(){
 const OB_MIN_ROWS=15;
 let obBlankPool=[];
 let obPendingDates={};
-let obDesiredBlankCount=OB_MIN_ROWS;
+let obDesiredBlankCount=DB.get('cargo_ob_blankcount',OB_MIN_ROWS);
+function obSaveBlankCounts(){DB.set('cargo_ob_blankcount',obDesiredBlankCount);}
 let obRemoteRenderPending=false;
 let obFocusGuardAttached=false;
 const OB_FIELD_ORDER=['date','debitAcc','debitAmt','creditAcc','creditAmt','desc','paidNo'];
@@ -3500,6 +3541,7 @@ function obAttachFocusGuard(){
 function obEnsureMinRows(rows){
   const realCount=rows.length;
   if(obDesiredBlankCount<OB_MIN_ROWS)obDesiredBlankCount=OB_MIN_ROWS;
+  obSaveBlankCounts();
   const blanksNeeded=Math.max(0,obDesiredBlankCount-realCount);
   const realIds=new Set(rows.map(r=>r.id));
   obBlankPool=obBlankPool.filter(id=>{
@@ -3744,47 +3786,46 @@ function obKeyHandler(ev,el,isLastRow){
     el.blur();
     if(isLastRow){
       obDesiredBlankCount++;
-      setTimeout(()=>{
-        renderObEntries();
-        const allRows=document.querySelectorAll('#obEntryBody tr');
-        const newRow=allRows[allRows.length-1];
-        if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
-      },10);
+      obSaveBlankCounts();
+      renderObEntries();
+      const allRows=document.querySelectorAll('#obEntryBody tr');
+      const newRow=allRows[allRows.length-1];
+      if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
     }else{
-      setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+      const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
     }
     return;
   }
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+      const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
     }else if(ev.key==='ArrowUp'){
-      if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rids[rowIdx-1],colIdx),10);}
+      if(rowIdx>0){ev.preventDefault();el.blur();obFocusCell(rids[rowIdx-1],colIdx);}
     }
     return;
   }
   if(hasDatalist){
     if(ev.key==='ArrowRight'){
       let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
-      if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx+1),10);}
+      if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();obFocusCell(rid,colIdx+1);}
     }else if(ev.key==='ArrowLeft'){
       let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
-      if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx-1),10);}
+      if(atStart && colIdx>0){ev.preventDefault();el.blur();obFocusCell(rid,colIdx-1);}
     }
     return;
   }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
-    setTimeout(()=>{const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);},10);
+    const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
   }else if(ev.key==='ArrowUp'){
-    if(rowIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rids[rowIdx-1],colIdx),10);}
+    if(rowIdx>0){ev.preventDefault();el.blur();obFocusCell(rids[rowIdx-1],colIdx);}
   }else if(ev.key==='ArrowRight'){
     let atEdge=true;try{atEdge=(el.selectionStart===el.value.length);}catch(_){atEdge=true;}
-    if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx+1),10);}
+    if(atEdge && colIdx<OB_FIELD_ORDER.length-1){ev.preventDefault();el.blur();obFocusCell(rid,colIdx+1);}
   }else if(ev.key==='ArrowLeft'){
     let atStart=true;try{atStart=(el.selectionStart===0);}catch(_){atStart=true;}
-    if(atStart && colIdx>0){ev.preventDefault();el.blur();setTimeout(()=>obFocusCell(rid,colIdx-1),10);}
+    if(atStart && colIdx>0){ev.preventDefault();el.blur();obFocusCell(rid,colIdx-1);}
   }
 }
 
