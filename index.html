@@ -1987,7 +1987,14 @@ function saveAcc(){
       renameAccountEverywhere(oldName,name);
     }
   }
-  else{if(accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account pehle se hai!','error');return;}accounts.push({id:uid(),name,phone,address});}
+  else{
+    if(accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){toast('Yeh account pehle se hai!','error');return;}
+    // Also block if this name already exists as a Paid Account — otherwise the same name ends up
+    // in both lists, and every entry made under that name silently double-links into both ledgers.
+    const clashPaid=paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
+    if(clashPaid){toast('Yeh naam pehle se "Paid Accounts" mein maujood hai! Ek naam dono list mein nahi ho sakta.','error');return;}
+    accounts.push({id:uid(),name,phone,address});
+  }
   save();renderAccounts();updateAccLists();closeModal('accModal');toast('Account save ho gaya! ✅','success');
 }
 // Renaming an account updates its name everywhere it's referenced, so all past debit/credit
@@ -4666,6 +4673,10 @@ function savePaidAccModal(){
   // Paid No must be unique — duplicate numbers cause cashbook entries to silently link to the wrong account
   const dupe=paidAccounts.find(a=>a.paidNo===paidNo && a.id!==id);
   if(dupe){toast('Yeh Paid No "'+paidNo+'" pehle se "'+dupe.name+'" ke account mein use ho raha hai! Alag Paid No darain.','error');return;}
+  // Name must not already exist in the regular Accounts List either — otherwise the same name ends
+  // up in both lists, and every entry made under that name silently double-links into both ledgers.
+  const nameClash=paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase() && a.id!==id) || accounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
+  if(nameClash){toast('Yeh naam pehle se maujood hai (Accounts List ya Paid Accounts mein)! Alag naam darain.','error');return;}
   if(id){
     const a=paidAccounts.find(x=>x.id===id);
     if(a){a.name=name;a.paidNo=paidNo;a.phone=phone;}
