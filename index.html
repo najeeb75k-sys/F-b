@@ -4060,29 +4060,28 @@ function classifyAccountPrefix(name){
 
 // Builds the full grouped summary model from a filtered list of entries.
 // Returns everything renderSummary() and the print version both need, so the two stay in sync.
-function buildSummaryModel(data,paidData){
-  const am={};
-  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
-
-  // A Paid Account's real balance lives in its OWN ledger (paidEntries) — that can include
-  // TP-row-generated legs that were booked under a different account's name in the main Cashbook
-  // (e.g. a TP row's "paid" leg can be typed under a Vehicle account, while its Paid No still
-  // routes the money to a specific Paid Account's ledger). Grouping purely by entries[].name — as
-  // above — misses those legs and can show a Paid Account as Baqaya when its own ledger (same as
-  // the Paid Accounts page) says Jama. So for every registered Paid Account, replace whatever ended
-  // up under its name above with the real total from paidEntries (accounts sharing the same name
-  // under different Paid Nos are combined together).
+// Shared by buildSummaryModel and openSummaryGroupDetail — see buildSummaryModel for why entries
+// linked to a Paid Account get re-attributed to that Paid Account's name instead of their typed name.
+function buildAccountAmounts(data,paidData){
+  const claimedByPaid={};
   if(paidData){
-    const paidTotals={};
-    paidData.forEach(e=>{
-      const acc=paidAccounts.find(a=>a.id===e.paidAccId);
+    paidData.forEach(pe=>{
+      const acc=paidAccounts.find(a=>a.id===pe.paidAccId);
       if(!acc)return;
-      const key=acc.name.trim();
-      if(!paidTotals[key])paidTotals[key]={cr:0,dr:0};
-      if(e.type==='CR')paidTotals[key].cr+=e.amount;else paidTotals[key].dr+=e.amount;
+      const entryId=pe.cashbookRef||(pe.id+'_mirror');
+      claimedByPaid[entryId]=acc.name.trim();
     });
-    Object.keys(paidTotals).forEach(key=>{am[key]=paidTotals[key];});
   }
+  const am={};
+  data.forEach(e=>{
+    const key=claimedByPaid[e.id]||e.name;
+    if(!am[key])am[key]={cr:0,dr:0};
+    if(e.type==='CR')am[key].cr+=e.amount;else am[key].dr+=e.amount;
+  });
+  return am;
+}
+function buildSummaryModel(data,paidData){
+  const am=buildAccountAmounts(data,paidData);
 
   // Top accounts are pulled out separately above the grouped sections, so they must be excluded
   // from their PA-/Party-/V-/P- group below — otherwise their balance would be counted twice.
@@ -4373,18 +4372,7 @@ function openSummaryGroupDetail(names,label){
   if(!names.length){toast('Is group mein koi account nahi hai','');return;}
   const data=summaryFilteredEntries();
   const paidData=summaryFilteredPaidEntries();
-  const am={};
-  data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
-  // Same override as buildSummaryModel — a Paid Account's real CR/DR is from its own ledger.
-  const paidTotals={};
-  paidData.forEach(e=>{
-    const acc=paidAccounts.find(a=>a.id===e.paidAccId);
-    if(!acc)return;
-    const key=acc.name.trim();
-    if(!paidTotals[key])paidTotals[key]={cr:0,dr:0};
-    if(e.type==='CR')paidTotals[key].cr+=e.amount;else paidTotals[key].dr+=e.amount;
-  });
-  Object.keys(paidTotals).forEach(key=>{am[key]=paidTotals[key];});
+  const am=buildAccountAmounts(data,paidData);
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
