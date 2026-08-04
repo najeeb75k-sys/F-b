@@ -4060,9 +4060,29 @@ function classifyAccountPrefix(name){
 
 // Builds the full grouped summary model from a filtered list of entries.
 // Returns everything renderSummary() and the print version both need, so the two stay in sync.
-function buildSummaryModel(data){
+function buildSummaryModel(data,paidData){
   const am={};
   data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
+
+  // A Paid Account's real balance lives in its OWN ledger (paidEntries) — that can include
+  // TP-row-generated legs that were booked under a different account's name in the main Cashbook
+  // (e.g. a TP row's "paid" leg can be typed under a Vehicle account, while its Paid No still
+  // routes the money to a specific Paid Account's ledger). Grouping purely by entries[].name — as
+  // above — misses those legs and can show a Paid Account as Baqaya when its own ledger (same as
+  // the Paid Accounts page) says Jama. So for every registered Paid Account, replace whatever ended
+  // up under its name above with the real total from paidEntries (accounts sharing the same name
+  // under different Paid Nos are combined together).
+  if(paidData){
+    const paidTotals={};
+    paidData.forEach(e=>{
+      const acc=paidAccounts.find(a=>a.id===e.paidAccId);
+      if(!acc)return;
+      const key=acc.name.trim();
+      if(!paidTotals[key])paidTotals[key]={cr:0,dr:0};
+      if(e.type==='CR')paidTotals[key].cr+=e.amount;else paidTotals[key].dr+=e.amount;
+    });
+    Object.keys(paidTotals).forEach(key=>{am[key]=paidTotals[key];});
+  }
 
   // Top accounts are pulled out separately above the grouped sections, so they must be excluded
   // from their PA-/Party-/V-/P- group below — otherwise their balance would be counted twice.
@@ -4233,10 +4253,22 @@ function summaryFilteredEntries(){
   else if(flt==='month')data=data.filter(e=>e.date.startsWith(now.toISOString().substr(0,7)));
   return data;
 }
+// Same date filter, applied to the Paid Accounts' own ledger (paidEntries) — needed so Summary can
+// source each Paid Account's real balance from its own ledger (see buildSummaryModel below) instead
+// of just whatever happens to be sitting under its exact name in the main Cashbook.
+function summaryFilteredPaidEntries(){
+  const flt=document.getElementById('summaryFilter').value;
+  const now=new Date();let data=[...paidEntries];
+  if(flt==='today')data=data.filter(e=>e.date===today());
+  else if(flt==='week'){const wd=new Date();wd.setDate(wd.getDate()-7);data=data.filter(e=>new Date(e.date)>=wd);}
+  else if(flt==='month')data=data.filter(e=>e.date.startsWith(now.toISOString().substr(0,7)));
+  return data;
+}
 
 function renderSummary(){
   const data=summaryFilteredEntries();
-  const m=buildSummaryModel(data);
+  const paidData=summaryFilteredPaidEntries();
+  const m=buildSummaryModel(data,paidData);
   // Total Jama / Total Baqaya — har account ka net balance (CR minus DR) nikal kar, net-Jama
   // accounts ka total alag aur net-Baqaya accounts ka total alag jama karte hain (Dashboard
   // aur Summary print jaisa hi hisaab).
@@ -4340,8 +4372,19 @@ function renderSummary(){
 function openSummaryGroupDetail(names,label){
   if(!names.length){toast('Is group mein koi account nahi hai','');return;}
   const data=summaryFilteredEntries();
+  const paidData=summaryFilteredPaidEntries();
   const am={};
   data.forEach(e=>{if(!am[e.name])am[e.name]={cr:0,dr:0};if(e.type==='CR')am[e.name].cr+=e.amount;else am[e.name].dr+=e.amount;});
+  // Same override as buildSummaryModel — a Paid Account's real CR/DR is from its own ledger.
+  const paidTotals={};
+  paidData.forEach(e=>{
+    const acc=paidAccounts.find(a=>a.id===e.paidAccId);
+    if(!acc)return;
+    const key=acc.name.trim();
+    if(!paidTotals[key])paidTotals[key]={cr:0,dr:0};
+    if(e.type==='CR')paidTotals[key].cr+=e.amount;else paidTotals[key].dr+=e.amount;
+  });
+  Object.keys(paidTotals).forEach(key=>{am[key]=paidTotals[key];});
   const rows=names.map(n=>{
     const v=am[n]||{cr:0,dr:0};
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
@@ -4382,7 +4425,8 @@ function saveSummaryTopAccounts(){
 function printPage(id){
   if(id==='summary'){
     const data=summaryFilteredEntries();
-    const m=buildSummaryModel(data);
+    const paidData=summaryFilteredPaidEntries();
+    const m=buildSummaryModel(data,paidData);
     // Total Jama / Total Baqaya — account-balance based (same logic as on-screen Summary and
     // Dashboard), not raw entry sums.
     let tcr=0,tdr=0;
@@ -4673,10 +4717,11 @@ function savePaidAccModal(){
   // Paid No must be unique — duplicate numbers cause cashbook entries to silently link to the wrong account
   const dupe=paidAccounts.find(a=>a.paidNo===paidNo && a.id!==id);
   if(dupe){toast('Yeh Paid No "'+paidNo+'" pehle se "'+dupe.name+'" ke account mein use ho raha hai! Alag Paid No darain.','error');return;}
-  // Name must not already exist in the regular Accounts List either — otherwise the same name ends
-  // up in both lists, and every entry made under that name silently double-links into both ledgers.
-  const nameClash=paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase() && a.id!==id) || accounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
-  if(nameClash){toast('Yeh naam pehle se maujood hai (Accounts List ya Paid Accounts mein)! Alag naam darain.','error');return;}
+  // Same name with a different Paid No is normal here (one party can have many Paid Accounts rows) —
+  // only block if this name already exists in the regular Accounts List, since that's the cross-list
+  // clash that causes an entry to double-link into both ledgers.
+  const nameClash=accounts.find(a=>a.name.toLowerCase()===name.toLowerCase());
+  if(nameClash){toast('Yeh naam pehle se "Accounts List" mein maujood hai! Alag naam istemal karein ya wahan se account hataayen.','error');return;}
   if(id){
     const a=paidAccounts.find(x=>x.id===id);
     if(a){a.name=name;a.paidNo=paidNo;a.phone=phone;}
