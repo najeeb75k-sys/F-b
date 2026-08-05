@@ -1653,11 +1653,11 @@ function saveLang(){
   if(!sel)return;
   cfg.lang=sel.value;save();applyLanguage();toast('Language updated! ✅','success');
 }
-function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});}
-// Same as fmt(), but drops a trailing ".00" for whole-number amounts (keeps real paisa/cents if
-// the amount actually has them) — used only in the Summary report (screen + print), since that's
-// where the extra ".00" on every line was just visual clutter.
-function fmtSummary(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:2});}
+// Whole-number amounts print without a trailing ".00" everywhere in the app; real paisa/cents
+// (e.g. 1234.50) still show their decimal part.
+function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:2});}
+// Kept as an alias so any existing fmtSummary( calls keep working exactly the same as fmt() now.
+function fmtSummary(n){return fmt(n);}
 function today(){return new Date().toISOString().split('T')[0];}
 function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
 function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
