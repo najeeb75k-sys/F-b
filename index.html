@@ -1374,7 +1374,10 @@ const FIREBASE_CONFIG = {
 };
 const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('PASTE_');
 
-let fbApp=null, fbAuth=null, fbDb=null, fbUser=null, fbUnsub=null, fbSavePending=false, fbApplyingRemote=false;
+let fbApp=null, fbAuth=null, fbDb=null, fbUser=null, fbUnsub=null, fbEntriesUnsub=null, fbSavePending=false, fbApplyingRemote=false;
+// Last-synced snapshot of each Cashbook entry (id -> JSON string), used to work out which
+// entries actually changed since the last sync so only THOSE get sent — see syncEntriesIncremental().
+let cloudEntriesSnapshot={};
 
 if(FIREBASE_ENABLED){
   try{
@@ -1432,6 +1435,32 @@ function onSignedIn(){
   toast('Google account se sign-in ho gaya! ✅ Mobile/laptop sync chalu hai.','success');
 }
 
+// refresh whichever page is open so the other device's edits appear instantly
+function refreshUIAfterCloudChange(){
+  refreshDash();
+  if(document.getElementById('page-autoEntry')?.classList.contains('active')){
+    // Don't redraw the cashbook grid while the user is mid-edit in it (e.g. still picking a name
+    // from the suggestion list, not yet blurred) — a redraw right now would wipe whatever isn't
+    // committed yet and the row would never get its date. Defer until they leave that field.
+    if(cbHasActiveFocus()){cbRemoteRenderPending=true;}
+    else{renderCashbook();}
+  }
+  if(document.getElementById('page-tpEntry')?.classList.contains('active')){
+    if(tpHasActiveFocus()){tpRemoteRenderPending=true;}
+    else{renderTpEntries();}
+  }
+  if(document.getElementById('page-obEntry')?.classList.contains('active')){
+    if(obHasActiveFocus()){obRemoteRenderPending=true;}
+    else{renderObEntries();}
+  }
+  if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
+  if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
+  if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
+  if(document.getElementById('page-paidAccounts')?.classList.contains('active'))renderPaidAccounts();
+  if(document.getElementById('page-paidAccDetail')?.classList.contains('active')&&currentPaidAccId)renderPaidAccDetail(currentPaidAccId);
+  renderLastLogin();
+}
+
 function attachCloudSync(){
   if(!fbUser||!fbDb)return;
   const docRef=fbDb.collection('cargo_data').doc(fbUser.uid);
@@ -1440,7 +1469,6 @@ function attachCloudSync(){
     if(snap.exists){
       const data=snap.data();
       fbApplyingRemote=true;
-      entries=data.entries||[];
       accounts=data.accounts||[];
       if(data.cfg)cfg={...cfg,...data.cfg};
       recycleBin=data.recycleBin||recycleBin;
@@ -1449,31 +1477,20 @@ function attachCloudSync(){
       tpRows=data.tpRows||tpRows;
       obRows=data.obRows||obRows;
       if(data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
-      DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
+      // ONE-TIME MIGRATION: older versions of the app kept the whole Cashbook ledger as a single
+      // big array field right here on this document — every tiny edit re-uploaded/re-downloaded
+      // the ENTIRE ledger, which is exactly why syncing got slower and slower as entries piled up.
+      // Entries now sync individually instead (attachEntriesSync() below), which is what actually
+      // fixes that — so the first time we still see the old array field, copy it over once.
+      if(Array.isArray(data.entries) && data.entries.length>0 && !cfg._entriesSubcolMigrated){
+        entries=data.entries;
+        DB.set('cargo_entries',entries);
+        cfg._entriesSubcolMigrated=true;
+        pushToCloud({entries,cfg}); // seeds the new per-entry sync AND marks migration done everywhere
+      }
+      DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
       DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);
-      // refresh whichever page is open so the other device's edits appear instantly
-      refreshDash();
-      if(document.getElementById('page-autoEntry')?.classList.contains('active')){
-        // Don't redraw the cashbook grid while the user is mid-edit in it (e.g. still picking a name
-        // from the suggestion list, not yet blurred) — a redraw right now would wipe whatever isn't
-        // committed yet and the row would never get its date. Defer until they leave that field.
-        if(cbHasActiveFocus()){cbRemoteRenderPending=true;}
-        else{renderCashbook();}
-      }
-      if(document.getElementById('page-tpEntry')?.classList.contains('active')){
-        if(tpHasActiveFocus()){tpRemoteRenderPending=true;}
-        else{renderTpEntries();}
-      }
-      if(document.getElementById('page-obEntry')?.classList.contains('active')){
-        if(obHasActiveFocus()){obRemoteRenderPending=true;}
-        else{renderObEntries();}
-      }
-      if(document.getElementById('page-accounts')?.classList.contains('active'))renderAccounts();
-      if(document.getElementById('page-accDetail')?.classList.contains('active')&&currentAccDetailId)renderAccDetail(currentAccDetailId);
-      if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
-      if(document.getElementById('page-paidAccounts')?.classList.contains('active'))renderPaidAccounts();
-      if(document.getElementById('page-paidAccDetail')?.classList.contains('active')&&currentPaidAccId)renderPaidAccDetail(currentPaidAccId);
-      renderLastLogin();
+      refreshUIAfterCloudChange();
       fbApplyingRemote=false;
       setSyncBadge('connected');
     }else if(!snap.metadata.fromCache){
@@ -1491,7 +1508,44 @@ function attachCloudSync(){
     console.error('Firestore listen error',err);
     setSyncBadge('offline');
   });
+  attachEntriesSync();
 }
+
+// Cashbook entries live in their own per-entry subcollection (cargo_data/{uid}/entries/{id})
+// instead of one giant array field, so adding/changing ONE entry only ever writes/reads that ONE
+// document — sync speed no longer depends on how many months of entries you've built up.
+function attachEntriesSync(){
+  if(!fbUser||!fbDb)return;
+  if(fbEntriesUnsub)fbEntriesUnsub();
+  const col=fbDb.collection('cargo_data').doc(fbUser.uid).collection('entries');
+  fbEntriesUnsub=col.onSnapshot({includeMetadataChanges:true}, snap=>{
+    if(snap.metadata.hasPendingWrites)return; // our own optimistic echo of a write we just made — already applied locally, nothing to do
+    let changed=false;
+    fbApplyingRemote=true;
+    snap.docChanges().forEach(chg=>{
+      const d=chg.doc.data();
+      const idx=entries.findIndex(e=>e.id===d.id);
+      if(chg.type==='removed'){
+        cloudEntriesSnapshot[d.id]=undefined;delete cloudEntriesSnapshot[d.id];
+        if(idx>=0){entries.splice(idx,1);changed=true;}
+      }else{
+        cloudEntriesSnapshot[d.id]=JSON.stringify(d);
+        if(idx>=0)entries[idx]=d; else entries.push(d);
+        changed=true;
+      }
+    });
+    if(changed){
+      DB.set('cargo_entries',entries);
+      refreshUIAfterCloudChange();
+    }
+    fbApplyingRemote=false;
+    setSyncBadge('connected');
+  }, err=>{
+    console.error('Entries sync error',err);
+    setSyncBadge('offline');
+  });
+}
+
 
 // pushToCloud now only sends the specific field(s) that were actually changed, not the whole
 // data bundle every time. Previously EVERY save (even a single cashbook entry) re-sent the
@@ -1500,10 +1554,22 @@ function attachCloudSync(){
 // Pending fields accumulate across the debounce window so several quick saves (e.g. save() then
 // savePaid()) still go out together in one write.
 let fbPushTimer=null, fbPendingFields=null;
+let fbEntriesPushTimer=null, fbEntriesDirty=false;
 function pushToCloud(fields){
   if(!fbUser||!fbDb)return;
   if(fbApplyingRemote)return; // don't echo back data we just received
-  fbPendingFields=Object.assign(fbPendingFields||{}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows,obRows});
+  fields=Object.assign({}, fields||{entries,accounts,cfg,recycleBin,paidAccounts,paidEntries,summaryTopAccounts,tpRows,obRows});
+  // `entries` (the Cashbook ledger) is synced separately below, one changed row at a time,
+  // instead of going into this document as one big array field — this is what actually fixes
+  // syncing feeling slow: only the entry that changed goes over the network, not the whole ledger.
+  if('entries' in fields){
+    fbEntriesDirty=true;
+    delete fields.entries;
+    clearTimeout(fbEntriesPushTimer);
+    fbEntriesPushTimer=setTimeout(syncEntriesIncremental,400);
+  }
+  if(Object.keys(fields).length===0)return; // nothing besides entries changed this round
+  fbPendingFields=Object.assign(fbPendingFields||{}, fields);
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
   fbPushTimer=setTimeout(()=>{
@@ -1517,6 +1583,45 @@ function pushToCloud(fields){
     });
   },400); // debounce so fast typing doesn't spam Firestore
 }
+
+// Diffs the in-memory `entries` array against what was last sent to the cloud and writes only
+// the rows that actually changed (added/edited/deleted) as individual documents — so a Cashbook
+// with thousands of old entries syncs a brand-new row just as fast as a Cashbook with 10.
+function syncEntriesIncremental(){
+  fbEntriesDirty=false;
+  if(!fbUser||!fbDb)return;
+  const col=fbDb.collection('cargo_data').doc(fbUser.uid).collection('entries');
+  const currentIds=new Set();
+  const toWrite=[];
+  entries.forEach(e=>{
+    if(!e||!e.id)return;
+    currentIds.add(e.id);
+    const json=JSON.stringify(e);
+    if(cloudEntriesSnapshot[e.id]!==json){toWrite.push(e);}
+  });
+  const toDelete=Object.keys(cloudEntriesSnapshot).filter(id=>!currentIds.has(id));
+  if(toWrite.length===0 && toDelete.length===0)return;
+  setSyncBadge('syncing');
+  const ops=[...toWrite.map(e=>({op:'set',id:e.id,data:e})),...toDelete.map(id=>({op:'delete',id}))];
+  const chunks=[];
+  for(let i=0;i<ops.length;i+=400)chunks.push(ops.slice(i,i+400)); // Firestore caps a batch at 500 writes
+  let p=Promise.resolve();
+  chunks.forEach(chunk=>{
+    p=p.then(()=>{
+      const batch=fbDb.batch();
+      chunk.forEach(op=>{
+        if(op.op==='set'){batch.set(col.doc(String(op.id)),op.data);cloudEntriesSnapshot[op.id]=JSON.stringify(op.data);}
+        else{batch.delete(col.doc(String(op.id)));delete cloudEntriesSnapshot[op.id];}
+      });
+      return batch.commit();
+    });
+  });
+  p.then(()=>setSyncBadge('connected')).catch(err=>{
+    console.error('Entries sync failed',err);
+    setSyncBadge('offline');
+  });
+}
+
 
 if(FIREBASE_ENABLED && fbAuth){
   fbAuth.onAuthStateChanged(user=>{
@@ -1701,6 +1806,8 @@ document.getElementById('loginUser').addEventListener('keydown',e=>{if(e.key==='
 function doLogout(){
   if(confirm('Logout karna chahte hain?')){
     if(fbUnsub){fbUnsub();fbUnsub=null;}
+    if(fbEntriesUnsub){fbEntriesUnsub();fbEntriesUnsub=null;}
+    cloudEntriesSnapshot={}; // so a different account signing in on this device doesn't diff against the wrong account's entries
     if(FIREBASE_ENABLED&&fbAuth&&fbAuth.currentUser){fbAuth.signOut().catch(()=>{});}
     fbUser=null;
     isStaffUser=false;
@@ -2630,6 +2737,11 @@ function cbRefreshAllDescriptions(){
   renderCashbook();
   toast('Sari descriptions refresh ho gayin! ✅','success');
 }
+// When true, cbFieldChange() skips its own per-row renderCashbook() call — used by drag-fill /
+// bulk-paste so filling many rows in one go re-renders the table ONCE at the end instead of once
+// per row (which is what made dragging a value down a big Cashbook feel slow).
+let cbSuppressAutoRender=false;
+
 function cbFieldChange(el){
   const pid=el.getAttribute('data-pid');
   const side=el.getAttribute('data-side');
@@ -2739,7 +2851,7 @@ function cbFieldChange(el){
   const fr=document.getElementById('cbFrom')?.value;
   const to=document.getElementById('cbTo')?.value;
   if(q||fr||to){
-    renderCashbook(); // filtered view — rows can appear/disappear as data changes, needs a full recompute
+    if(!cbSuppressAutoRender)renderCashbook(); // filtered view — rows can appear/disappear as data changes, needs a full recompute
     return;
   }
 
@@ -2750,9 +2862,9 @@ function cbFieldChange(el){
   const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
   const stillHasData=!!(dr||cr);
   if((wasBlank && stillHasData) || (!wasBlank && !stillHasData)){
-    renderCashbook();
+    if(!cbSuppressAutoRender)renderCashbook();
   }else{
-    cbUpdateTotalsOnly(); // normal edit on an already-real row — DOM left alone so focus stays put
+    if(!cbSuppressAutoRender)cbUpdateTotalsOnly(); // normal edit on an already-real row — DOM left alone so focus stays put
   }
 }
 
@@ -3006,6 +3118,7 @@ function cbDragEnd(){
   if(cbDragState && cbDragState.allRows && cbDragState.targetIdx>-1){
     const {allRows,srcIdx,targetIdx,sourceVal,field,side}=cbDragState;
     const lo=Math.min(srcIdx,targetIdx),hi=Math.max(srcIdx,targetIdx);
+    cbSuppressAutoRender=true; // fill every row first, re-render the table just once at the end (below) — was re-rendering the WHOLE table on every single row before, which is what made this slow
     for(let k=lo;k<=hi;k++){
       const r=allRows[k];
       const input=r.querySelector(`input[data-field="${field}"][data-side="${side||''}"]`);
@@ -3014,6 +3127,7 @@ function cbDragEnd(){
         cbFieldChange(input); // reuses the exact same validation/save path as a normal edit
       }
     }
+    cbSuppressAutoRender=false;
     toast('Value '+(hi-lo)+' rows mein copy ho gayi! ✅','success');
   }
   document.querySelectorAll('#cashbookBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
