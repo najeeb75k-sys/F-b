@@ -1013,9 +1013,10 @@
             </div>
             <button class="btn btn-primary btn-sm" onclick="cbFixMismatchedDates()">🛠️ Fix Mismatched Entries</button>
             <div style="font-size:12px;color:#075985;margin:14px 0 12px;border-top:1px solid #bae6fd;padding-top:12px;">
-              Pehle Cashbook mein Paid No ka sirf EK box tha (Baqaya aur Jama dono par wahi number lag jata tha). Ab har side ka apna alag Paid No hai — purani entries ko naye tareeqe se dobara check karke sahi karne ke liye ye button chalayein: jis side ka account Paid Accounts list mein maujood hai wahan sahi Paid No set ho jayega, jahan nahi hai wahan se hata diya jayega.
+              Agar aapke paas ek purana JSON backup hai jisme Paid No sahi thay (kisi galat "fix" se pehle ka), ye us backup ki file select karke sirf har entry ka <b>Paid No field</b> wapas ussi se restore kar dega — ID se match karke. Baaki kuch (date/amount/naam) ya koi bhi nayi entry nahi chhuyi jayegi.
             </div>
-            <button class="btn btn-primary btn-sm" onclick="cbFixPaidNoPerSide()">🛠️ Fix Paid No (Baqaya/Jama)</button>
+            <input type="file" id="cbRestorePaidNoFile" accept="application/json" style="display:none;" onchange="cbRestorePaidNoFromBackup(this)">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('cbRestorePaidNoFile').click()">📥 Paid No Backup Se Restore Karein</button>
           </div>
 
           <!-- RECYCLE BIN -->
@@ -4959,35 +4960,67 @@ function openEditPaidAcc(id){
   document.getElementById('paidAccPhone').value=a.phone||'';
   openModal('paidAccModal');
 }
-function cbFixPaidNoPerSide(){
-  // One-time repair tool: before the Paid No box was split into a separate one per side (Baqaya
-  // / Jama), the single shared box wrote the SAME Paid No onto both sides' entries — even when
-  // only one side was actually a Paid Account. This walks every Cashbook entry and:
-  //  - if its account name matches a real Paid Account, sets its Paid No to that account's
-  //    actual (current) Paid No — fixing it even if it was pointing at the wrong one before,
-  //  - otherwise clears any Paid No that got left on it by mistake from the old shared box.
-  if(!confirm('Purani entries check karke, jis side ka account Paid Accounts list mein maujood hai wahan sahi Paid No set kar diya jayega, aur jahan account Paid Account nahi hai wahan se Paid No hata diya jayega. Continue karein?'))return;
-  let fixed=0;
-  const touchedPids=new Set();
-  entries.forEach(e=>{
-    if(e.type!=='DR' && e.type!=='CR')return;
-    const acc=e.name?paidAccounts.find(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase()):null;
-    const correctPaidNo=acc?acc.paidNo:'';
-    if((e.paidNo||'')!==correctPaidNo){
-      e.paidNo=correctPaidNo;
-      fixed++;
-      touchedPids.add(e.pairId||e.id);
+// Restores just the .paidNo field on Cashbook/TP/OB entries, and just the .paidAccId field on
+// their linked Paid Account ledger entries, from an older JSON backup — matched strictly by each
+// record's own `id` (which never changes). Everything else on every record (date, amount, name,
+// description, and any entry that doesn't exist in the backup at all — i.e. anything added since
+// that backup was taken) is left completely untouched. This is the safe undo for the "Fix Paid No
+// (Baqaya/Jama)" tool, which incorrectly reassigned Paid No purely by account name and broke rows
+// belonging to Paid Accounts that share the same name but have different Paid Nos.
+function cbRestorePaidNoFromBackup(fileInput){
+  const file=fileInput.files&&fileInput.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    let data;
+    try{ data=JSON.parse(ev.target.result); }
+    catch(err){ toast('Ye file sahi JSON backup nahi hai','error'); fileInput.value=''; return; }
+    if(!Array.isArray(data.entries)){
+      toast('Is file mein "entries" nahi mile — sahi backup file select karein','error');
+      fileInput.value='';
+      return;
     }
-  });
-  if(fixed>0){
+    const entryPaidNoMap={};
+    data.entries.forEach(e=>{ if(e&&e.id)entryPaidNoMap[e.id]=e.paidNo||''; });
+    const paidEntryAccIdMap={};
+    (data.paidEntries||[]).forEach(pe=>{ if(pe&&pe.id)paidEntryAccIdMap[pe.id]=pe.paidAccId||''; });
+
+    let fixedEntries=0;
+    const touchedPids=new Set();
+    entries.forEach(e=>{
+      if(!(e.id in entryPaidNoMap))return; // not in this backup — leave it alone (probably added after the backup)
+      const backupVal=entryPaidNoMap[e.id];
+      if((e.paidNo||'')!==backupVal){
+        e.paidNo=backupVal;
+        fixedEntries++;
+        touchedPids.add(e.pairId||e.id);
+      }
+    });
+
+    let fixedLinks=0;
+    paidEntries.forEach(pe=>{
+      if(!(pe.id in paidEntryAccIdMap))return;
+      const backupAccId=paidEntryAccIdMap[pe.id];
+      if((pe.paidAccId||'')!==backupAccId && paidAccounts.some(a=>a.id===backupAccId)){
+        pe.paidAccId=backupAccId;
+        fixedLinks++;
+      }
+    });
+
+    if(fixedEntries===0 && fixedLinks===0){
+      toast('Is backup se koi farq nahi mila — Paid No pehle se hi match kar rahe hain','success');
+      fileInput.value='';
+      return;
+    }
     touchedPids.forEach(pid=>cbSyncPaidLink(pid));
     save();
+    savePaid();
     renderCashbook();
     refreshDash();
-    toast(`✅ ${fixed} entries ka Paid No sahi kar diya (Baqaya/Jama alag-alag)!`,'success');
-  }else{
-    toast('Sab entries pehle se hi sahi hain 👍','success');
-  }
+    toast(`✅ ${fixedEntries} entries ka Paid No aur ${fixedLinks} Paid Account links restore kar diye!`,'success');
+    fileInput.value='';
+  };
+  reader.readAsText(file);
 }
 function cbFixMismatchedDates(){
   // One-time repair tool: before the date-mirror bug fix, changing a Cashbook row's date did
