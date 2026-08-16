@@ -266,6 +266,10 @@
   td.cbcell{position:relative;padding:0!important;}
   td.cbcell input, td.cbcell .cbcell-input{width:100%;height:100%;border:none;background:transparent;outline:none;padding:9px 10px;font-size:13px;font-family:inherit;color:inherit;transition:background .15s ease,box-shadow .15s ease;}
   td.cbcell input:focus, td.cbcell .cbcell-input:focus{background:#eff5ff;box-shadow:inset 0 0 0 2px var(--primary-light);border-radius:4px;}
+  /* The Paid No cell holds two small side-by-side boxes (Baqaya / Jama) instead of one full-width
+     box — two Paid Accounts can share the same name but different Paid Nos, so each side needs
+     its own number. */
+  #cashbookBody td.cbcell input[data-field="paidNo"]{width:auto;flex:1 1 0;min-width:0;padding:9px 4px;text-align:center;border-radius:4px;}
   td.cbcell.cb-debit input{color:#c92e2e;font-weight:700;font-family:var(--mono);}
   td.cbcell.cb-credit input{color:#0f6b3b;font-weight:700;font-family:var(--mono);}
   td.cbcell.cb-profit input{color:#9333ea;font-weight:700;font-family:var(--mono);}
@@ -565,7 +569,7 @@
             <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
           </div>
           <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
-            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye.
+            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye. Agar Baqaya aur Jama <b>do alag Paid Accounts</b> hon (jaise ek se dusre mein transfer), toh <b>Paid No</b> box khali chhod kar seedha dono ka asal <b>account naam</b> Baqaya/Jama cells mein likhein — dono khud apne Paid Account se link ho jayenge.
           </span></div>
           <div class="tbl-wrap tbl-wrap-scroll" id="cashbookScrollWrap">
             <table style="table-layout:fixed;min-width:920px;">
@@ -1008,6 +1012,15 @@
               Agar kisi purani Cashbook entry ka date/amount Paid Account ledger mein alag dikh raha ho (jab date change karne par link wale side update nahi hota tha), ye button ek dafa chala kar sab ko wapas match kar dein.
             </div>
             <button class="btn btn-primary btn-sm" onclick="cbFixMismatchedDates()">🛠️ Fix Mismatched Entries</button>
+            <div style="font-size:12px;color:#075985;margin:14px 0 12px;border-top:1px solid #bae6fd;padding-top:12px;">
+              Agar aapke paas ek purana JSON backup hai jisme Paid No sahi thay (kisi galat "fix" se pehle ka), ye us backup ki file select karke sirf har entry ka <b>Paid No field</b> wapas ussi se restore kar dega — ID se match karke. Baaki kuch (date/amount/naam) ya koi bhi nayi entry nahi chhuyi jayegi.
+            </div>
+            <input type="file" id="cbRestorePaidNoFile" accept="application/json" style="display:none;" onchange="cbRestorePaidNoFromBackup(this)">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('cbRestorePaidNoFile').click()">📥 Paid No Backup Se Restore Karein</button>
+            <div style="font-size:12px;color:#075985;margin:14px 0 12px;border-top:1px solid #bae6fd;padding-top:12px;">
+              Cashbook, Party & Paid Entry, aur Opening Balance ki har entry ka Paid Account link ek hi click mein dobara refresh/recompute kar dega — kisi ek-ek row ko khol kar dobara tap karne ki zaroorat nahi.
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="refreshAllPaidLinks()">🔄 Sab Paid Account Links Refresh Karein</button>
           </div>
 
           <!-- RECYCLE BIN -->
@@ -2516,13 +2529,13 @@ function cbUpsertField(pairId,side,field,value){
   if(side==='dr'){
     if(!dr){
       // create DR entry only if there's something meaningful being typed
-      const _ppn=window.cbPendingPaidNo?window.cbPendingPaidNo[pairId]||'':'';
+      const _ppn=window.cbPendingPaidNo?.[pairId]?.dr||'';
       const _pmode=window.cbPendingMode?window.cbPendingMode[pairId]||'':'';
       const _pnote=window.cbPendingNote?window.cbPendingNote[pairId]||'':'';
       dr={id:uid(),pairId,date:existingDate,name:'',type:'DR',amount:0,ref:'',desc:'',paidNo:_ppn,mode:_pmode,note:_pnote};
       entries.push(dr);
       delete cbPendingDates[pairId];
-      if(window.cbPendingPaidNo)delete window.cbPendingPaidNo[pairId];
+      if(window.cbPendingPaidNo?.[pairId])delete window.cbPendingPaidNo[pairId].dr;
     }
     if(field==='name'){dr.name=value;}
     else if(field==='amount'){dr.amount=parseFloat(value)||0;}
@@ -2530,13 +2543,13 @@ function cbUpsertField(pairId,side,field,value){
     else if(field==='ref'){dr.ref=value;}
   }else{
     if(!cr){
-      const _ppn2=window.cbPendingPaidNo?window.cbPendingPaidNo[pairId]||'':'';
+      const _ppn2=window.cbPendingPaidNo?.[pairId]?.cr||'';
       const _pmode2=window.cbPendingMode?window.cbPendingMode[pairId]||'':'';
       const _pnote2=window.cbPendingNote?window.cbPendingNote[pairId]||'':'';
       cr={id:uid(),pairId,date:existingDate,name:'',type:'CR',amount:0,ref:'',desc:'',paidNo:_ppn2,mode:_pmode2,note:_pnote2};
       entries.push(cr);
       delete cbPendingDates[pairId];
-      if(window.cbPendingPaidNo)delete window.cbPendingPaidNo[pairId];
+      if(window.cbPendingPaidNo?.[pairId])delete window.cbPendingPaidNo[pairId].cr;
     }
     if(field==='name'){cr.name=value;}
     else if(field==='amount'){cr.amount=parseFloat(value)||0;}
@@ -2631,9 +2644,21 @@ function renderCashbook(){
     const dateVal=r.date||'';
     const drName=r.dr?.name||'', drAmt=r.dr?.amount||'', drRef=r.dr?.ref||'';
     const crName=r.cr?.name||'', crAmt=r.cr?.amount||'', crRef=r.cr?.ref||'';
-    const paidNo=r.dr?.paidNo||r.cr?.paidNo||r.paidNo||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
+    // Baqaya (dr) and Jama (cr) each keep their OWN Paid No now — needed because two different
+    // Paid Accounts can be saved under the exact same name but different Paid Nos, so the name
+    // alone can't always tell them apart; the number is what's unambiguous.
+    const drPaidNo=r.dr?.paidNo||(window.cbPendingPaidNo?.[pid]?.dr)||'';
+    const crPaidNo=r.cr?.paidNo||(window.cbPendingPaidNo?.[pid]?.cr)||'';
     const modeVal=r.dr?.mode||r.cr?.mode||(window.cbPendingMode?window.cbPendingMode[pid]:'')||'';
     const noteVal=r.dr?.note||r.cr?.note||(window.cbPendingNote?window.cbPendingNote[pid]:'')||'';
+    // If Baqaya and Jama each matched a DIFFERENT Paid Account, show both underneath the two
+    // boxes so it's clear both sides linked correctly (and to which specific Paid No, when the
+    // name is shared by more than one Paid Account).
+    const _drPaidAcc=cbResolvePaidAccountForEntry(r.dr,drPaidNo);
+    const _crPaidAcc=cbResolvePaidAccountForEntry(r.cr,crPaidNo);
+    const dualPaidHint=(_drPaidAcc && _crPaidAcc && _drPaidAcc.id!==_crPaidAcc.id)
+      ? `<div style="font-size:9px;color:#b45309;line-height:1.3;margin-top:2px;white-space:nowrap;" title="Baqaya aur Jama alag-alag Paid Accounts se link hain">B:${_drPaidAcc.paidNo||_drPaidAcc.name} · J:${_crPaidAcc.paidNo||_crPaidAcc.name}</div>`
+      : '';
     const autoPreview=cbComposeDesc(drName,crName,modeVal,noteVal);
     const previewHtml=(autoPreview.dr||autoPreview.cr)
       ? `<div style="font-size:10px;line-height:1.35;color:#64748b;margin-bottom:3px;">${autoPreview.dr?('DR: '+autoPreview.dr):''}${(autoPreview.dr&&autoPreview.cr)?'<br>':''}${autoPreview.cr?('CR: '+autoPreview.cr):''}</div>`
@@ -2648,7 +2673,14 @@ function renderCashbook(){
       <td class="cbcell cb-debit"><input type="text" placeholder="Account" value="${drName}" data-field="name" data-side="dr" data-pid="${pid}" list="cbAccList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','name','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-debit"><input type="number" placeholder="0.00" value="${drAmt||''}" data-field="amount" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','amount','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
-      <td class="cbcell" style="background:rgba(232,160,32,0.05);"><input type="text" placeholder="Paid No" value="${paidNo}" data-field="paidNo" data-side="" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(232,160,32,0.05);padding:4px 3px;">
+        <div style="display:flex;gap:3px;align-items:center;">
+          <input type="text" placeholder="B#" title="Baqaya side ka Paid No" value="${drPaidNo}" data-field="paidNo" data-side="dr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
+          <input type="text" placeholder="J#" title="Jama side ka Paid No" value="${crPaidNo}" data-field="paidNo" data-side="cr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
+        </div>
+        ${dualPaidHint}
+        <span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','dr')" title="Drag Baqaya Paid No to copy down"></span>
+      </td>
       <td class="cbcell" style="background:rgba(245,158,11,0.06);">
         <select data-field="mode" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" style="color:#b45309;font-weight:600;width:100%;height:100%;border:none;background:transparent;outline:none;padding:9px 6px;font-size:13px;font-family:inherit;">
           <option value="" ${!modeVal?'selected':''}>—</option>
@@ -2773,15 +2805,18 @@ function cbFieldChange(el){
     const paidVal = value.trim();
     // Find matching paid account by paidNo
     const paidAcc = paidAccounts.find(a=>a.paidNo===paidVal);
-    // Save paidNo on existing entries for this row
+    // Save paidNo only on THIS side's entry — Baqaya and Jama can each be a different Paid
+    // Account (even ones that happen to share the same name), so their Paid Nos are independent.
+    const wantType=side==='dr'?'DR':'CR';
     let matched = false;
-    entries.filter(e=>(e.pairId||e.id)===pid).forEach(e=>{
+    entries.filter(e=>(e.pairId||e.id)===pid && e.type===wantType).forEach(e=>{
       e.paidNo=paidVal;
       matched=true;
     });
     if(!matched){
       if(!window.cbPendingPaidNo) window.cbPendingPaidNo={};
-      window.cbPendingPaidNo[pid]=paidVal;
+      if(!window.cbPendingPaidNo[pid]) window.cbPendingPaidNo[pid]={};
+      window.cbPendingPaidNo[pid][side]=paidVal;
     }
     cbSyncPaidLink(pid);
     save();
@@ -2858,14 +2893,55 @@ function cbFieldChange(el){
   // Unfiltered view: only rebuild the whole table when the row's structure actually changed —
   // i.e. a brand-new row just got its first real entry (needs a delete button + a fresh blank row below),
   // or a row that had data just became fully empty again (needs its delete button removed).
+  // This used to ALWAYS mean rebuilding the entire table's HTML from scratch — which is exactly
+  // what made typing the very first field of a new row (usually the Baqaya account name, since
+  // it's typed before Jama) feel slow once the ledger had months of history: every keystroke that
+  // started a new row re-rendered every OTHER row too. cbPatchRowStructure() now patches just the
+  // one row that actually changed whenever it's safe to (the normal case), falling back to a full
+  // render only for the rarer cases (search/date filter active, or a backdated entry that needs
+  // to jump position in the date sort).
   const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
   const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
   const stillHasData=!!(dr||cr);
   if((wasBlank && stillHasData) || (!wasBlank && !stillHasData)){
-    if(!cbSuppressAutoRender)renderCashbook();
+    if(!cbSuppressAutoRender){
+      if(!cbPatchRowStructure(pid,stillHasData))renderCashbook();
+    }
   }else{
     if(!cbSuppressAutoRender)cbUpdateTotalsOnly(); // normal edit on an already-real row — DOM left alone so focus stays put
   }
+}
+
+// Patches ONE row's delete-button cell in place instead of rebuilding the whole table, when it's
+// safe to do so. Returns false (meaning: caller should fall back to a full renderCashbook()) for
+// the cases where that isn't safe — a search/date filter is active (rows can appear/disappear),
+// this was the very last blank row (needs a fresh one appended below, plus blank-row bookkeeping),
+// or the row's date would put it out of order relative to what's already above it.
+function cbPatchRowStructure(pid,stillHasData){
+  const tbody=document.getElementById('cashbookBody');
+  if(!tbody)return false;
+  const q=(document.getElementById('cbSearch')?.value||'').trim();
+  const fr=document.getElementById('cbFrom')?.value;
+  const to=document.getElementById('cbTo')?.value;
+  if(q||fr||to)return false;
+  const tr=tbody.querySelector(`tr[data-pid="${pid}"]`);
+  if(!tr)return false;
+  if(stillHasData){
+    if(tr===tbody.lastElementChild)return false;
+    const dateInput=tr.querySelector('input[data-field="date"]');
+    const myDate=dateInput?dateInput.value:'';
+    if(myDate){
+      const prev=tr.previousElementSibling;
+      const prevDate=prev?prev.querySelector('input[data-field="date"]')?.value:'';
+      if(prevDate && myDate<prevDate)return false; // backdated — needs to move earlier in the sort order
+    }
+  }
+  const delCell=tr.querySelector('td.no-print');
+  if(delCell){
+    delCell.innerHTML = stillHasData ? `<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="cbDeleteRow('${pid}')">🗑️</button>` : '';
+  }
+  cbUpdateTotalsOnly();
+  return true;
 }
 
 function cbUpdateTotalsOnly(){
@@ -2880,25 +2956,34 @@ function cbUpdateTotalsOnly(){
     +`<span class="et-chip ${balCls}"><span class="et-label">Balance</span>${fmt(bal)}</span>`;
 }
 
-// Keeps a Cashbook row's linked Paid Account ledger entry in sync: exactly ONE side of the row
-// (whichever side's account name actually matches the Paid Account for this row's Paid No) mirrors
-// into paidEntries with the correct DR/CR type — the other side is never linked there, even though
-// both DR and CR entries share the same row/pairId/paidNo.
+// Given a cashbook DR/CR entry, work out which Paid Account (if any) it should link to.
+// Paid No is trusted directly whenever it's set — it's the one unambiguous key. Name-matching is
+// only used as a fallback when there's no Paid No, and ONLY if that name belongs to exactly ONE
+// Paid Account — if two or more Paid Accounts share that exact name (which does happen), matching
+// by name alone can't safely tell them apart, so it's left unlinked rather than guessing (and
+// possibly guessing wrong, which is what corrupted data the last time this matched by name).
+function cbResolvePaidAccountForEntry(e,paidValFallback){
+  if(!e)return null;
+  const paidVal=e.paidNo||paidValFallback||'';
+  if(paidVal){
+    const byNo=paidAccounts.find(a=>a.paidNo===paidVal);
+    if(byNo)return byNo;
+  }
+  if(!e.name)return null;
+  const nameMatches=paidAccounts.filter(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase());
+  return nameMatches.length===1?nameMatches[0]:null;
+}
+
+// Keeps a Cashbook row's linked Paid Account ledger entry in sync: each side (Baqaya/Jama)
+// resolves its OWN Paid Account independently now (via its own Paid No box), so one side is
+// never accidentally matched using the other side's number.
 function cbSyncPaidLink(pid){
   const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
   const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
-  const paidVal=(dr&&dr.paidNo)||(cr&&cr.paidNo)||(window.cbPendingPaidNo?window.cbPendingPaidNo[pid]:'')||'';
-  const paidAccByNo=paidVal?paidAccounts.find(a=>a.paidNo===paidVal):null;
   let changed=false;
   [dr,cr].forEach(e=>{
     if(!e)return;
-    // Which Paid Account (if any) does this side actually belong to? Prefer the Paid No match,
-    // but ALSO fall back to matching the typed account name directly against the Paid Accounts
-    // list — previously a row only mirrored into the Paid Account ledger if the "Paid No" box
-    // was filled in, so typing a Paid Account's name without also entering its Paid No left the
-    // entry stuck in the Accounts List and missing from its Paid Account page.
-    const paidAccByName=e.name?paidAccounts.find(a=>a.name.trim().toLowerCase()===e.name.trim().toLowerCase()):null;
-    const paidAcc=(paidAccByNo && e.name && e.name.trim().toLowerCase()===paidAccByNo.name.trim().toLowerCase())?paidAccByNo:paidAccByName;
+    const paidAcc=cbResolvePaidAccountForEntry(e);
     const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
     if(paidAcc){
       if(!existingLink){
@@ -2916,10 +3001,12 @@ function cbSyncPaidLink(pid){
 }
 
 // Field order across one cashbook row, left to right — used for arrow-key/Enter navigation.
+// Baqaya (dr) and Jama (cr) each get their own Paid No box now, since two Paid Accounts can
+// share the exact same name but have different Paid Nos — the name alone can't tell them apart.
 const CB_FIELD_ORDER=[
   {side:'',field:'date'},
   {side:'dr',field:'name'},{side:'dr',field:'amount'},{side:'dr',field:'ref'},
-  {side:'',field:'paidNo'},
+  {side:'dr',field:'paidNo'},{side:'cr',field:'paidNo'},
   {side:'',field:'mode'},
   {side:'',field:'note'},
   {side:'cr',field:'name'},{side:'cr',field:'amount'},{side:'cr',field:'ref'}
@@ -4256,7 +4343,13 @@ function buildAccountAmounts(data,paidData){
       const acc=paidAccounts.find(a=>a.id===pe.paidAccId);
       if(!acc)return;
       const entryId=pe.cashbookRef||(pe.id+'_mirror');
-      claimedByPaid[entryId]=acc.name.trim();
+      // If this Paid Account's name is shared by more than one Paid Account (same name, different
+      // Paid No — this does happen), group it under a "Name [PaidNo]" label instead of the bare
+      // name. Grouping by name alone would silently blend two different accounts' money together
+      // in Summary/Dashboard totals — Paid No (via paidAccId, set correctly at entry time) is the
+      // only thing that reliably tells them apart.
+      const isDup=paidAccounts.filter(a=>a.name.trim().toLowerCase()===acc.name.trim().toLowerCase()).length>1;
+      claimedByPaid[entryId]=isDup ? `${acc.name.trim()} [${acc.paidNo}]` : acc.name.trim();
     });
   }
   const am={};
@@ -4881,6 +4974,103 @@ function openEditPaidAcc(id){
   document.getElementById('paidAccNo').value=a.paidNo||'';
   document.getElementById('paidAccPhone').value=a.phone||'';
   openModal('paidAccModal');
+}
+// Restores just the .paidNo field on Cashbook/TP/OB entries, and just the .paidAccId field on
+// their linked Paid Account ledger entries, from an older JSON backup — matched strictly by each
+// record's own `id` (which never changes). Everything else on every record (date, amount, name,
+// description, and any entry that doesn't exist in the backup at all — i.e. anything added since
+// that backup was taken) is left completely untouched. This is the safe undo for the "Fix Paid No
+// (Baqaya/Jama)" tool, which incorrectly reassigned Paid No purely by account name and broke rows
+// belonging to Paid Accounts that share the same name but have different Paid Nos.
+// Re-runs the Paid Account link logic for EVERY Cashbook, Party & Paid Entry, and Opening Balance
+// row in one go — instead of having to open each row individually (e.g. re-typing its Paid No) to
+// get it to re-link, which is what a single row re-triggering itself into place suggested was
+// needed. Safe to run any time: it just recomputes each row's link from its current data, it
+// doesn't change dates/amounts/names.
+function refreshAllPaidLinks(){
+  if(!confirm('Cashbook, Party & Paid Entry, aur Opening Balance ki tamam entries ke Paid Account links dobara refresh honge. Continue karein?'))return;
+  const cbPids=new Set();
+  entries.forEach(e=>{ if(e.pairId)cbPids.add(e.pairId); });
+  cbPids.forEach(pid=>cbSyncPaidLink(pid));
+  tpRows.forEach(row=>tpSyncRowEntries(row));
+  obRows.forEach(row=>obSyncRowEntries(row));
+  save();
+  savePaid();
+  saveTp();
+  saveOb();
+  renderCashbook();
+  if(document.getElementById('page-tpEntry')?.classList.contains('active'))renderTpEntries();
+  if(document.getElementById('page-obEntry')?.classList.contains('active'))renderObEntries();
+  if(document.getElementById('page-paidAccounts')?.classList.contains('active'))renderPaidAccounts();
+  refreshDash();
+  toast('✅ Sab Paid Account links refresh ho gaye!','success');
+}
+function cbRestorePaidNoFromBackup(fileInput){
+  const file=fileInput.files&&fileInput.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    let data;
+    try{ data=JSON.parse(ev.target.result); }
+    catch(err){ toast('Ye file sahi JSON backup nahi hai','error'); fileInput.value=''; return; }
+    if(!Array.isArray(data.entries)){
+      toast('Is file mein "entries" nahi mile — sahi backup file select karein','error');
+      fileInput.value='';
+      return;
+    }
+    const entryPaidNoMap={};
+    data.entries.forEach(e=>{ if(e&&e.id)entryPaidNoMap[e.id]=e.paidNo||''; });
+
+    let fixedEntries=0;
+    const touchedIds=new Set();
+    entries.forEach(e=>{
+      if(!(e.id in entryPaidNoMap))return; // not in this backup — leave it alone (probably added after the backup)
+      const backupVal=entryPaidNoMap[e.id];
+      if((e.paidNo||'')!==backupVal){
+        e.paidNo=backupVal;
+        fixedEntries++;
+      }
+      touchedIds.add(e.id);
+    });
+
+    // Rebuild each touched entry's Paid Account ledger link straight off its now-restored Paid
+    // No — matched ONLY by Paid No against the current Paid Accounts list, never by name. This is
+    // the key fix: matching by name is exactly what broke things last time, since Paid Accounts
+    // can share the same name with a different Paid No — Paid No is the only unambiguous key.
+    let fixedLinks=0, createdLinks=0, removedLinks=0;
+    touchedIds.forEach(eid=>{
+      const e=entries.find(x=>x.id===eid);
+      if(!e)return;
+      const correctAcc=e.paidNo?paidAccounts.find(a=>a.paidNo===e.paidNo):null;
+      const existingLink=paidEntries.find(pe=>pe.cashbookRef===e.id);
+      if(correctAcc){
+        if(existingLink){
+          if(existingLink.paidAccId!==correctAcc.id){existingLink.paidAccId=correctAcc.id;fixedLinks++;}
+          existingLink.date=e.date||existingLink.date;existingLink.type=e.type;existingLink.amount=e.amount||0;existingLink.desc=e.desc||'';existingLink.ref=e.ref||'';
+        }else{
+          paidEntries.push({id:uid(),paidAccId:correctAcc.id,cashbookRef:e.id,date:e.date||today(),type:e.type,amount:e.amount||0,desc:e.desc||'',ref:e.ref||''});
+          createdLinks++;
+        }
+      }else if(existingLink){
+        paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==e.id);
+        removedLinks++;
+      }
+    });
+
+    const totalFixed=fixedEntries+fixedLinks+createdLinks+removedLinks;
+    if(totalFixed===0){
+      toast('Is backup se koi farq nahi mila — sab pehle se sahi hai','success');
+      fileInput.value='';
+      return;
+    }
+    save();
+    savePaid();
+    renderCashbook();
+    refreshDash();
+    toast(`✅ Paid No theek: ${fixedEntries} · Links theek: ${fixedLinks} · nayi bani: ${createdLinks} · hataayi: ${removedLinks}`,'success');
+    fileInput.value='';
+  };
+  reader.readAsText(file);
 }
 function cbFixMismatchedDates(){
   // One-time repair tool: before the date-mirror bug fix, changing a Cashbook row's date did
