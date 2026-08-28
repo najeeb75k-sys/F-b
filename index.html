@@ -531,7 +531,7 @@
             <span class="card-title" style="color:#dc2626;">⚠️ Balance Mismatch — Adhoori (One-Sided) Entries</span>
           </div>
           <div style="font-size:12px;color:var(--text-light);margin-bottom:10px;">
-            Yeh entries sirf Baqaya ya sirf Jama side par hain — dusra side khali hai. Isi waja se Total Jama aur Total Baqaya barabar nahi hain. Cashbook mein ja kar khali side khud bharein.
+            Yeh entries ya toh sirf Baqaya/Jama side par hain (dusra side khali), ya Party &amp; Paid Entry row ka Baqaya uske Jama+Profit+TP se match nahi karta. Isi wajah se Total Jama aur Total Baqaya barabar nahi hain. Neeche se ja kar khali/galat side khud bharein.
           </div>
           <div id="balanceMismatchList"></div>
         </div>
@@ -1021,11 +1021,6 @@
               Cashbook, Party & Paid Entry, aur Opening Balance ki har entry ka Paid Account link ek hi click mein dobara refresh/recompute kar dega — kisi ek-ek row ko khol kar dobara tap karne ki zaroorat nahi.
             </div>
             <button class="btn btn-primary btn-sm" onclick="refreshAllPaidLinks()">🔄 Sab Paid Account Links Refresh Karein</button>
-            <div style="font-size:12px;color:#075985;margin:14px 0 12px;border-top:1px solid #bae6fd;padding-top:12px;">
-              Kabhi kabhi sync ke dauran ek TP/OB row delete hone ke baad uski Cashbook wali mirror entries kisi doosre mobile par reh jati hain — jinka koi parent row ab exist hi nahi karta ("ghost" entries), jis se total galat aa sakta hai. Ye button sirf **dhoond kar dikhata hai** — kuch bhi delete nahi karta jab tak aap khud confirm na karein, aur confirm karne par bhi entries seedha delete nahi hotin, Recycle Bin mein chali jati hain (wahan se wapas laayi ja sakti hain).
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="findGhostEntries()">👻 Ghost Entries Check Karein</button>
-            <div id="ghostEntriesResult" style="margin-top:10px;"></div>
           </div>
 
           <!-- RECYCLE BIN -->
@@ -1537,19 +1532,10 @@ function attachEntriesSync(){
   if(fbEntriesUnsub)fbEntriesUnsub();
   const col=fbDb.collection('cargo_data').doc(fbUser.uid).collection('entries');
   fbEntriesUnsub=col.onSnapshot({includeMetadataChanges:true}, snap=>{
-    // IMPORTANT: check hasPendingWrites PER DOCUMENT (chg.doc.metadata), not on the whole
-    // snapshot (snap.metadata). The old snap.metadata.hasPendingWrites check threw away the
-    // ENTIRE batch — including real changes from the OTHER device — any time this device also
-    // had even one of its own writes still confirming. That's exactly how a delete made on one
-    // phone could silently never reach the other: the other phone's own unrelated pending write
-    // happened to land in the same batch, so the whole batch (including the real delete) got
-    // skipped and never re-delivered, leaving a "ghost" entry behind forever. Filtering per-doc
-    // still skips our own optimistic echoes (each has its own hasPendingWrites=true) while never
-    // dropping a genuine remote change.
+    if(snap.metadata.hasPendingWrites)return; // our own optimistic echo of a write we just made — already applied locally, nothing to do
     let changed=false;
     fbApplyingRemote=true;
     snap.docChanges().forEach(chg=>{
-      if(chg.doc.metadata.hasPendingWrites)return; // skip only THIS doc if it's our own unconfirmed write
       const d=chg.doc.data();
       const idx=entries.findIndex(e=>e.id===d.id);
       if(chg.type==='removed'){
@@ -1626,18 +1612,7 @@ function syncEntriesIncremental(){
     const json=JSON.stringify(e);
     if(cloudEntriesSnapshot[e.id]!==json){toWrite.push(e);}
   });
-  let toDelete=Object.keys(cloudEntriesSnapshot).filter(id=>!currentIds.has(id));
-  // SAFETY CAP: if this round would delete a big chunk of the ledger at once (e.g. this device's
-  // local copy was momentarily thin — page just reloaded, storage was cleared, still mid-sync —
-  // and something triggered a save before it caught up), that's almost certainly NOT a real bulk
-  // delete the user asked for. Refuse the delete side this round (still send genuine new/edited
-  // rows) and let the next sync round re-check once local data has settled, instead of risking
-  // wiping real entries off the cloud for every other device.
-  const knownTotal=Object.keys(cloudEntriesSnapshot).length;
-  if(toDelete.length>15 && toDelete.length>knownTotal*0.1){
-    console.warn('syncEntriesIncremental: skipped '+toDelete.length+' deletes this round (looked like a bulk/incomplete-sync delete, not a real one)');
-    toDelete=[];
-  }
+  const toDelete=Object.keys(cloudEntriesSnapshot).filter(id=>!currentIds.has(id));
   if(toWrite.length===0 && toDelete.length===0)return;
   setSyncBadge('syncing');
   const ops=[...toWrite.map(e=>({op:'set',id:e.id,data:e})),...toDelete.map(id=>({op:'delete',id}))];
@@ -2015,58 +1990,89 @@ function refreshDash(){
   renderBalanceMismatch();
 }
 
-// BALANCE MISMATCH DETECTOR — finds cashbook pairs that only have a Baqaya OR only a Jama side.
-// These one-sided rows are exactly why Total Jama and Total Baqaya on the dashboard don't match.
-// Read-only: just shows the list so the user can go fix the row themselves in Cashbook.
+// BALANCE MISMATCH DETECTOR — finds cashbook pairs that only have a Baqaya OR only a Jama side
+// (or one side sitting at zero while the other has real money — same thing, just half-filled).
+// Party & Paid Entry (TP) rows are a 1-Baqaya-to-many-Jama split by design (Party, Paid Account,
+// Profit Account, TP Account), so they're checked as a whole group by tpRowId — comparing them as
+// simple 2-sided pairs would flag EVERY TP row as "incomplete" even when it's fully balanced.
+// Read-only: just shows the list so the user can go fix the row themselves.
 function renderBalanceMismatch(){
   const card=document.getElementById('balanceMismatchCard');
   const list=document.getElementById('balanceMismatchList');
   if(!card||!list)return;
-  // Opening Balance rows (entries with obRowId) are naturally one-sided on purpose — they are NOT
-  // real mismatches, so they're excluded from this check entirely and never shown on screen.
-  const checkEntries=entries.filter(e=>!e.obRowId);
-  // First check: if total CR == total DR, no need to show anything — balanced even if some pairs are one-sided
-  const totalCR=checkEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-  const totalDR=checkEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
-  if(Math.abs(totalCR-totalDR)<0.001){card.style.display='none';return;}
-  // group entries by pairId (or its own id if it never had a pair)
+  // Opening Balance rows (obRowId) are naturally one-sided on purpose, and TP rows (tpRowId) are
+  // checked separately below as a group — both excluded from this simple pairId check.
+  const checkEntries=entries.filter(e=>!e.obRowId && !e.tpRowId);
   const groups={};
   checkEntries.forEach(e=>{
     const pid=e.pairId||e.id;
     if(!groups[pid])groups[pid]=[];
     groups[pid].push(e);
   });
-  const mismatched=Object.entries(groups).filter(([pid,list])=>{
-    const hasDR=list.some(e=>e.type==='DR');
-    const hasCR=list.some(e=>e.type==='CR');
-    return hasDR!==hasCR; // exactly one side present, not both
+  const cbMismatched=Object.entries(groups).filter(([pid,grp])=>{
+    const drEntry=grp.find(e=>e.type==='DR');
+    const crEntry=grp.find(e=>e.type==='CR');
+    const drOk=!!(drEntry && drEntry.amount);
+    const crOk=!!(crEntry && crEntry.amount);
+    return drOk!==crOk; // one side has real money, the other is missing or sitting at zero
   });
-  if(!mismatched.length){
+
+  // Party & Paid Entry rows: total Baqaya (Party, DR) should equal total Jama (Paid + Profit + TP
+  // Account, all CR) for that same row.
+  const tpGroups={};
+  entries.filter(e=>e.tpRowId).forEach(e=>{
+    if(!tpGroups[e.tpRowId])tpGroups[e.tpRowId]=[];
+    tpGroups[e.tpRowId].push(e);
+  });
+  const tpMismatched=Object.entries(tpGroups).filter(([rid,grp])=>{
+    const dr=grp.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+    const cr=grp.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
+    return Math.abs(dr-cr)>=1; // ignore sub-rupee rounding
+  });
+
+  if(!cbMismatched.length && !tpMismatched.length){
     card.style.display='none';
     return;
   }
   card.style.display='block';
-  list.innerHTML=mismatched.map(([pid,grp])=>{
-    const e=grp[0];
-    const sideLabel=e.type==='DR'?'Baqaya':'Jama';
-    const missingLabel=e.type==='DR'?'Jama':'Baqaya';
-    const color=e.type==='DR'?'#dc2626':'#15803d';
+  const cbHtml=cbMismatched.map(([pid,grp])=>{
+    const filled=grp.find(e=>e.amount)||grp[0];
+    const sideLabel=filled.type==='DR'?'Baqaya':'Jama';
+    const missingLabel=filled.type==='DR'?'Jama':'Baqaya';
+    const color=filled.type==='DR'?'#dc2626':'#15803d';
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #fecaca;flex-wrap:wrap;">
       <div style="font-size:12px;">
-        <span style="font-weight:600;">${e.date}</span> — ${e.name}
-        <span style="color:${color};font-weight:700;">(${sideLabel}: ${fmt(e.amount)})</span>
+        <span style="font-weight:600;">${filled.date}</span> — ${filled.name}
+        <span style="color:${color};font-weight:700;">(${sideLabel}: ${fmt(filled.amount)})</span>
         <span style="color:#dc2626;"> — ${missingLabel} side khali hai</span>
-        ${e.desc?` | ${e.desc}`:''}
+        ${filled.desc?` | ${filled.desc}`:''}
       </div>
       <button class="btn btn-sm btn-outline no-print" onclick="goToMismatchRow('${pid}')">👁️ Cashbook Mein Dekhein</button>
     </div>`;
   }).join('');
+  const tpHtml=tpMismatched.map(([rid,grp])=>{
+    const dr=grp.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+    const cr=grp.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
+    const party=grp.find(e=>e.tpRole==='party')||grp[0];
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #fecaca;flex-wrap:wrap;">
+      <div style="font-size:12px;">
+        <span style="font-weight:600;">${party.date}</span> — ${party.name}
+        <span style="color:#dc2626;font-weight:700;">(Baqaya: ${fmt(dr)} — Jama+Profit+TP: ${fmt(cr)})</span>
+        <span style="color:#dc2626;"> — farq: ${fmt(Math.abs(dr-cr))}</span>
+        ${party.desc?` | ${party.desc}`:''}
+      </div>
+      <button class="btn btn-sm btn-outline no-print" onclick="goToMismatchRow('${rid}',true)">👁️ Party &amp; Paid Entry Mein Dekhein</button>
+    </div>`;
+  }).join('');
+  list.innerHTML=cbHtml+tpHtml;
 }
-// Just scrolls to and highlights the row in Cashbook — no auto-fix. User fills the missing side themselves.
-function goToMismatchRow(pairId){
-  showPage('autoEntry',null);
+// Just scrolls to and highlights the row — no auto-fix. User fills the missing side themselves.
+function goToMismatchRow(id,isTp){
+  showPage(isTp?'tpEntry':'autoEntry',null);
   setTimeout(()=>{
-    const row=document.querySelector(`#cashbookBody tr[data-pid="${pairId}"]`);
+    const row=isTp
+      ? document.querySelector(`#tpEntryBody tr[data-rid="${id}"]`)
+      : document.querySelector(`#cashbookBody tr[data-pid="${id}"]`);
     if(row){
       row.scrollIntoView({behavior:'smooth',block:'center'});
       row.style.outline='2px solid #e8a020';
@@ -4123,45 +4129,6 @@ function printOb(){
 
 // ===== RECYCLE BIN =====
 let recycleBin=DB.get('cargo_recycle',[]);
-// GHOST ENTRIES — finds Cashbook entries whose parent TP row / OB row no longer exists (the
-// row was deleted, but this entry's own delete didn't reach this device — see the per-doc
-// hasPendingWrites fix above for the sync bug that caused this). Detection only — nothing is
-// touched until the user reviews the list and taps Confirm, and even then entries are moved to
-// the Recycle Bin (soft delete), never hard-deleted, so nothing is ever unrecoverable.
-function findGhostEntries(){
-  const tpIds=new Set(tpRows.map(r=>r.id));
-  const obIds=new Set(obRows.map(r=>r.id));
-  const ghosts=entries.filter(e=>(e.tpRowId&&!tpIds.has(e.tpRowId))||(e.obRowId&&!obIds.has(e.obRowId)));
-  const box=document.getElementById('ghostEntriesResult');
-  if(!ghosts.length){
-    box.innerHTML='<div style="padding:10px;background:#dcfce7;border-radius:8px;color:#166534;font-size:13px;">✅ Koi ghost entry nahi mili — data saaf hai.</div>';
-    return;
-  }
-  const rows=ghosts.map(e=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #fecaca;font-size:12px;flex-wrap:wrap;">
-    <span><b>${e.date||'-'}</b> — ${e.name||'(blank)'} — ${e.type} ${fmt(e.amount||0)} ${e.desc?('| '+e.desc):''}</span>
-    <span style="color:#94a3b8;">id: ${e.id}</span>
-  </div>`).join('');
-  box.innerHTML=`<div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
-    <div style="font-weight:700;color:#dc2626;margin-bottom:8px;">⚠️ ${ghosts.length} ghost entries mili (in ka parent TP/OB row exist nahi karta):</div>
-    <div style="max-height:220px;overflow-y:auto;margin-bottom:10px;">${rows}</div>
-    <button class="btn btn-danger btn-sm" onclick='cleanGhostEntries(${JSON.stringify(ghosts.map(g=>g.id))})'>🗑️ In Sab Ko Recycle Bin Mein Bhejein</button>
-  </div>`;
-}
-function cleanGhostEntries(ids){
-  if(!confirm(ids.length+' entries ko Recycle Bin mein bhej dein? (Cashbook se hat jayengi, Recycle Bin se wapas mil sakti hain)'))return;
-  const idSet=new Set(ids);
-  const removed=entries.filter(e=>idSet.has(e.id));
-  entries=entries.filter(e=>!idSet.has(e.id));
-  removed.forEach(e=>{e.deletedAt=new Date().toISOString();recycleBin.push(e);});
-  save();
-  DB.set('cargo_recycle',recycleBin);
-  pushToCloud({recycleBin});
-  refreshDash();
-  if(document.getElementById('page-summary')?.classList.contains('active'))renderSummary();
-  renderRecycleBin();
-  document.getElementById('ghostEntriesResult').innerHTML='<div style="padding:10px;background:#dcfce7;border-radius:8px;color:#166534;font-size:13px;">✅ '+ids.length+' entries Recycle Bin mein bhej di gayin.</div>';
-  toast('Ghost entries saaf ho gayi! ✅','success');
-}
 function renderRecycleBin(){
   const count=document.getElementById('recycleBinCount');
   const list=document.getElementById('recycleBinList');
