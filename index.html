@@ -109,6 +109,10 @@
   .btn-icon{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:white;padding:7px 11px;border-radius:9px;cursor:pointer;font-size:13px;transition:all .2s;}
   .btn-icon:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.3);}
   .menu-btn{display:none;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:white;font-size:19px;cursor:pointer;padding:6px 10px;border-radius:9px;}
+  .tb-entry-date{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:9px;padding:5px 9px;}
+  .tb-entry-date-ic{font-size:12px;opacity:.85;}
+  .tb-entry-date input[type="date"]{background:transparent;border:none;outline:none;color:#fff;font-size:12px;font-family:inherit;color-scheme:dark;width:118px;}
+  @media(max-width:560px){.tb-entry-date input[type="date"]{width:104px;}}
   @media(max-width:768px){.menu-btn{display:block;}}
 
   .app-layout{display:flex;min-height:calc(100vh - 56px);}
@@ -190,14 +194,14 @@
      stays visible while scrolling down through entries, and (2) the horizontal scrollbar sits
      right at the bottom of this box — always on-screen — instead of at the bottom of a possibly
      very long page that you'd have to scroll all the way down to reach. */
-  .tbl-wrap-scroll{max-height:66vh;overflow-y:auto;}
+  .tbl-wrap-scroll{max-height:72vh;overflow-y:auto;scroll-behavior:auto;}
   .tbl-wrap-scroll table thead th{position:sticky;top:0;z-index:5;background:var(--primary);color:#fff;}
   #page-tpEntry .tbl-wrap-scroll table thead th{background:linear-gradient(180deg,var(--primary),var(--primary-dark));}
-  table{width:100%;border-collapse:collapse;font-size:13px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
   thead{background:var(--primary);color:white;}
-  th{padding:12px 13px;text-align:left;font-weight:700;white-space:nowrap;border-right:1px solid rgba(255,255,255,0.1);border-bottom:2px solid rgba(255,255,255,0.1);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;}
+  th{padding:7px 9px;text-align:left;font-weight:700;white-space:nowrap;border-right:1px solid rgba(255,255,255,0.1);border-bottom:2px solid rgba(255,255,255,0.1);font-size:10px;text-transform:uppercase;letter-spacing:.4px;}
   th:last-child{border-right:none;}
-  td{padding:10px 13px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;}
+  td{padding:6px 9px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;}
   td:last-child{border-right:none;}
   tr:last-child td{border-bottom:none;}
   tr:hover td{background:#f7f9fc;}
@@ -264,12 +268,12 @@
 
   /* Cashbook grid — Excel-style cells + fill handle */
   td.cbcell{position:relative;padding:0!important;}
-  td.cbcell input, td.cbcell .cbcell-input{width:100%;height:100%;border:none;background:transparent;outline:none;padding:9px 10px;font-size:13px;font-family:inherit;color:inherit;transition:background .15s ease,box-shadow .15s ease;}
+  td.cbcell input, td.cbcell .cbcell-input{width:100%;height:100%;border:none;background:transparent;outline:none;padding:6px 8px;font-size:12px;font-family:inherit;color:inherit;transition:background .1s ease,box-shadow .1s ease;}
   td.cbcell input:focus, td.cbcell .cbcell-input:focus{background:#eff5ff;box-shadow:inset 0 0 0 2px var(--primary-light);border-radius:4px;}
   /* The Paid No cell holds two small side-by-side boxes (Baqaya / Jama) instead of one full-width
      box — two Paid Accounts can share the same name but different Paid Nos, so each side needs
      its own number. */
-  #cashbookBody td.cbcell input[data-field="paidNo"]{width:auto;flex:1 1 0;min-width:0;padding:9px 4px;text-align:center;border-radius:4px;}
+  #cashbookBody td.cbcell input[data-field="paidNo"]{width:auto;flex:1 1 0;min-width:0;padding:6px 4px;text-align:center;border-radius:4px;}
   td.cbcell.cb-debit input{color:#c92e2e;font-weight:700;font-family:var(--mono);}
   td.cbcell.cb-credit input{color:#0f6b3b;font-weight:700;font-family:var(--mono);}
   td.cbcell.cb-profit input{color:#9333ea;font-weight:700;font-family:var(--mono);}
@@ -491,6 +495,10 @@
     <div class="tb-actions">
       <span class="gdrive-status" id="syncStatusBadge" style="display:none;"></span>
       <span style="font-size:11px;opacity:.7;" id="currentDate"></span>
+      <span class="tb-entry-date" title="Naye entries (Cashbook / Party &amp; Paid) is date se banengi">
+        <span class="tb-entry-date-ic">📅</span>
+        <input type="date" id="globalEntryDate" onchange="setGlobalEntryDate(this.value)">
+      </span>
       <button class="btn-icon" onclick="doLogout()" title="Logout"><span data-i18n="logout">🚪 Logout</span></button>
     </div>
   </div>
@@ -572,19 +580,19 @@
             Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye. Agar Baqaya aur Jama <b>do alag Paid Accounts</b> hon (jaise ek se dusre mein transfer), toh <b>Paid No</b> box khali chhod kar seedha dono ka asal <b>account naam</b> Baqaya/Jama cells mein likhein — dono khud apne Paid Account se link ho jayenge.
           </span></div>
           <div class="tbl-wrap tbl-wrap-scroll" id="cashbookScrollWrap">
-            <table style="table-layout:fixed;min-width:920px;">
+            <table style="table-layout:fixed;min-width:800px;">
               <colgroup>
+                <col style="width:28px;">
+                <col style="width:102px;">
+                <col style="width:130px;">
+                <col style="width:96px;">
+                <col style="width:78px;">
+                <col style="width:78px;">
+                <col style="width:130px;">
+                <col style="width:130px;">
+                <col style="width:96px;">
+                <col style="width:78px;">
                 <col style="width:34px;">
-                <col style="width:118px;">
-                <col style="width:150px;">
-                <col style="width:110px;">
-                <col style="width:90px;">
-                <col style="width:90px;">
-                <col style="width:150px;">
-                <col style="width:150px;">
-                <col style="width:110px;">
-                <col style="width:90px;">
-                <col style="width:40px;">
               </colgroup>
               <thead><tr>
                 <th>#</th>
@@ -636,21 +644,21 @@
             Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 4 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama) aur TP Account (Jama).
           </span></div>
           <div class="tbl-wrap tbl-wrap-scroll" id="tpScrollWrap">
-            <table style="table-layout:fixed;min-width:1180px;">
+            <table style="table-layout:fixed;min-width:1030px;">
               <colgroup>
+                <col style="width:28px;">
+                <col style="width:96px;">
+                <col style="width:122px;">
+                <col style="width:78px;">
+                <col style="width:78px;">
+                <col style="width:122px;">
+                <col style="width:78px;">
+                <col style="width:78px;">
+                <col style="width:104px;">
+                <col style="width:78px;">
+                <col style="width:122px;">
+                <col style="width:78px;">
                 <col style="width:34px;">
-                <col style="width:110px;">
-                <col style="width:140px;">
-                <col style="width:90px;">
-                <col style="width:90px;">
-                <col style="width:140px;">
-                <col style="width:90px;">
-                <col style="width:90px;">
-                <col style="width:120px;">
-                <col style="width:90px;">
-                <col style="width:140px;">
-                <col style="width:90px;">
-                <col style="width:40px;">
               </colgroup>
               <thead><tr>
                 <th>#</th>
@@ -1777,10 +1785,40 @@ function fmt(n){return (cfg.curr||'Rs.')+' '+Number(n||0).toLocaleString('en-PK'
 // Kept as an alias so any existing fmtSummary( calls keep working exactly the same as fmt() now.
 function fmtSummary(n){return fmt(n);}
 function today(){return new Date().toISOString().split('T')[0];}
-function save(){DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
-function savePaid(){DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
-function saveTp(){DB.set('cargo_tp_rows',tpRows);DB.set('cargo_entries',entries);pushToCloud({tpRows,entries});}
-function saveOb(){DB.set('cargo_ob_rows',obRows);DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);pushToCloud({obRows,entries,accounts});}
+
+// ----- Global "Entry Date" (header date picker) -----
+// Picked once in the topbar; every new blank row created afterwards (Cashbook, Party & Paid
+// Entry, Opening Balance) defaults to this date instead of forcing a manual pick each time.
+let globalEntryDate=localStorage.getItem('cargo_default_entry_date')||today();
+function setGlobalEntryDate(val){
+  globalEntryDate=val||today();
+  localStorage.setItem('cargo_default_entry_date',globalEntryDate);
+  // Refresh whichever grid is open so its still-blank rows immediately pick up the new default.
+  if(document.getElementById('cashbookBody'))renderCashbook();
+  if(document.getElementById('tpEntryBody'))renderTpEntries();
+  if(typeof renderObEntries==='function' && document.getElementById('obEntryBody'))renderObEntries();
+}
+function initGlobalEntryDate(){
+  const inp=document.getElementById('globalEntryDate');
+  if(inp)inp.value=globalEntryDate;
+}
+
+// While a bulk operation (drag-fill / multi-cell paste) is in progress, save()/savePaid()/saveTp()/
+// saveOb() skip their expensive localStorage write + cloud push on every single row — that per-row
+// write (stringifying the whole entries array + a Firestore push) is what made dragging a value
+// down a big Cashbook/Party&Paid grid feel slow. bulkFlush() below does the write ONCE at the end.
+let bulkOpActive=false, bulkDirty={};
+function bulkFlush(){
+  const d=bulkDirty; bulkDirty={}; bulkOpActive=false;
+  if(d.entries)save();
+  if(d.paid)savePaid();
+  if(d.tp)saveTp();
+  if(d.ob)saveOb();
+}
+function save(){if(bulkOpActive){bulkDirty.entries=true;return;}DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
+function savePaid(){if(bulkOpActive){bulkDirty.paid=true;return;}DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
+function saveTp(){if(bulkOpActive){bulkDirty.tp=true;return;}DB.set('cargo_tp_rows',tpRows);DB.set('cargo_entries',entries);pushToCloud({tpRows,entries});}
+function saveOb(){if(bulkOpActive){bulkDirty.ob=true;return;}DB.set('cargo_ob_rows',obRows);DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);pushToCloud({obRows,entries,accounts});}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3000);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1836,6 +1874,7 @@ function initApp(){
   updateCoName();
   applyLanguage();
   document.getElementById('currentDate').textContent=new Date().toLocaleDateString('en-PK',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+  initGlobalEntryDate();
   document.getElementById('settingCo').value=cfg.company;
   document.getElementById('settingUser').value=cfg.user;
   // Migrate old single staff login (cfg.staffUser/staffPass) into the new 5-user array, once.
@@ -2530,7 +2569,7 @@ function cbEnsureMinRows(rows){
   }
   for(let i=0;i<blanksNeeded;i++){
     const pid=cbBlankPool[i];
-    rows.push({pairId:null,tempPairId:pid,date:cbPendingDates[pid]||'',dr:null,cr:null,blank:true});
+    rows.push({pairId:null,tempPairId:pid,date:cbPendingDates[pid]||globalEntryDate||'',dr:null,cr:null,blank:true});
   }
   return rows;
 }
@@ -2539,7 +2578,7 @@ function cbUpsertField(pairId,side,field,value){
   // side: 'dr' or 'cr'. field: 'name'|'amount'|'desc'|'ref'|'date'
   let dr=entries.find(e=>(e.pairId||e.id)===pairId && e.type==='DR');
   let cr=entries.find(e=>(e.pairId||e.id)===pairId && e.type==='CR');
-  const existingDate=(dr&&dr.date)||(cr&&cr.date)||cbPendingDates[pairId]||today();
+  const existingDate=(dr&&dr.date)||(cr&&cr.date)||cbPendingDates[pairId]||globalEntryDate||today();
 
   if(field==='date'){
     if(dr)dr.date=value;
@@ -3185,6 +3224,8 @@ function cbPasteHandler(ev,el){
     renderCashbook();
     pids=cbGetRowPids();
   }
+  cbSuppressAutoRender=true;
+  bulkOpActive=true;
   grid.forEach((rowText,ri)=>{
     const targetPid=pids[startRow+ri];
     if(!targetPid)return;
@@ -3198,12 +3239,18 @@ function cbPasteHandler(ev,el){
       if(inp){inp.value=val;cbFieldChange(inp);}
     });
   });
+  cbSuppressAutoRender=false;
+  bulkFlush();
   toast('Data paste ho gaya! ✅','success');
   setTimeout(()=>renderCashbook(),50);
 }
 
 // ----- Drag-to-fill any column down (Excel-style fill handle) -----
 let cbDragState=null;
+let cbDragLastPt=null; // {x,y} — kept fresh on every mousemove so the auto-scroll ticker (which
+                        // runs even when the mouse itself is momentarily still at the edge) knows
+                        // where the pointer currently is.
+let cbAutoScrollTimer=null;
 function cbStartDrag(ev,pid,field,side){
   ev.preventDefault();
   const sourceInput=document.querySelector(`#cashbookBody input[data-pid="${pid}"][data-field="${field}"][data-side="${side||''}"]`);
@@ -3212,14 +3259,16 @@ function cbStartDrag(ev,pid,field,side){
   cbDragState={sourcePid:pid,sourceVal,field,side:side||'',active:true};
   document.addEventListener('mousemove',cbDragMove);
   document.addEventListener('mouseup',cbDragEnd);
+  cbAutoScrollTimer=setInterval(cbAutoScrollTick,16);
 }
-function cbDragMove(ev){
-  if(!cbDragState)return;
-  const el=document.elementFromPoint(ev.clientX,ev.clientY);
+// Recomputes the highlighted drag range from whatever row is currently under (x,y). Pulled out of
+// cbDragMove so the auto-scroll ticker can call it too — once the container scrolls under a
+// stationary cursor, the row under the pointer changes even though the mouse itself didn't move.
+function cbUpdateDragTarget(x,y){
+  const el=document.elementFromPoint(x,y);
   const row=el?el.closest('tr[data-pid]'):null;
   document.querySelectorAll('#cashbookBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
   if(row){
-    // highlight from source row to hovered row
     const allRows=[...document.querySelectorAll('#cashbookBody tr[data-pid]')];
     const srcIdx=allRows.findIndex(r=>r.getAttribute('data-pid')===cbDragState.sourcePid);
     const tgtIdx=allRows.findIndex(r=>r===row);
@@ -3230,13 +3279,44 @@ function cbDragMove(ev){
     }
   }
 }
+function cbDragMove(ev){
+  if(!cbDragState)return;
+  cbDragLastPt={x:ev.clientX,y:ev.clientY};
+  cbUpdateDragTarget(ev.clientX,ev.clientY);
+}
+// Excel-jaisa edge auto-scroll: jab drag karte hue pointer table ke visible area ke upar/neeche
+// edge ke qareeb ho, container ko khud scroll karte raho — chahe mouse khud stationary ho — taake
+// screen se neeche wali rows tak bhi drag ho sake, sirf abhi jitni rows dikh rahi hain wahan tak nahi.
+function cbAutoScrollTick(){
+  if(!cbDragState || !cbDragLastPt)return;
+  const wrap=document.getElementById('cashbookScrollWrap');
+  if(!wrap)return;
+  const rect=wrap.getBoundingClientRect();
+  const edge=48,maxSpeed=22;
+  const y=cbDragLastPt.y;
+  let moved=false;
+  if(y<rect.top+edge && wrap.scrollTop>0){
+    const intensity=Math.min(1,(rect.top+edge-y)/edge);
+    wrap.scrollTop=Math.max(0,wrap.scrollTop-Math.max(3,intensity*maxSpeed));
+    moved=true;
+  }else if(y>rect.bottom-edge && wrap.scrollTop+wrap.clientHeight<wrap.scrollHeight){
+    const intensity=Math.min(1,(y-(rect.bottom-edge))/edge);
+    wrap.scrollTop=Math.min(wrap.scrollHeight-wrap.clientHeight,wrap.scrollTop+Math.max(3,intensity*maxSpeed));
+    moved=true;
+  }
+  if(moved)cbUpdateDragTarget(cbDragLastPt.x,cbDragLastPt.y);
+}
 function cbDragEnd(){
   document.removeEventListener('mousemove',cbDragMove);
   document.removeEventListener('mouseup',cbDragEnd);
+  clearInterval(cbAutoScrollTimer);
+  cbAutoScrollTimer=null;
+  cbDragLastPt=null;
   if(cbDragState && cbDragState.allRows && cbDragState.targetIdx>-1){
     const {allRows,srcIdx,targetIdx,sourceVal,field,side}=cbDragState;
     const lo=Math.min(srcIdx,targetIdx),hi=Math.max(srcIdx,targetIdx);
     cbSuppressAutoRender=true; // fill every row first, re-render the table just once at the end (below) — was re-rendering the WHOLE table on every single row before, which is what made this slow
+    bulkOpActive=true; // also skip the per-row localStorage write + cloud push until the loop below finishes
     for(let k=lo;k<=hi;k++){
       const r=allRows[k];
       const input=r.querySelector(`input[data-field="${field}"][data-side="${side||''}"]`);
@@ -3246,6 +3326,7 @@ function cbDragEnd(){
       }
     }
     cbSuppressAutoRender=false;
+    bulkFlush();
     toast('Value '+(hi-lo)+' rows mein copy ho gayi! ✅','success');
   }
   document.querySelectorAll('#cashbookBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
@@ -3313,7 +3394,7 @@ function tpEnsureMinRows(rows){
   }
   for(let i=0;i<blanksNeeded;i++){
     const id=tpBlankPool[i];
-    rows.push({id,date:tpPendingDates[id]||'',party:'',debit:'',refNo:'',paid:'',credit:'',paidNo:'',weightStation:'',profit:'',tpAcc:'',tpAmount:'',blank:true});
+    rows.push({id,date:tpPendingDates[id]||globalEntryDate||'',party:'',debit:'',refNo:'',paid:'',credit:'',paidNo:'',weightStation:'',profit:'',tpAcc:'',tpAmount:'',blank:true});
   }
   return rows;
 }
@@ -3389,7 +3470,7 @@ function tpUpsertField(rid,field,value){
     return;
   }
   if(!row){
-    row={id:rid,date:tpPendingDates[rid]||today(),party:'',debit:0,refNo:'',paid:'',credit:0,paidNo:'',weightStation:'',profit:0,tpAcc:'',tpAmount:0};
+    row={id:rid,date:tpPendingDates[rid]||globalEntryDate||today(),party:'',debit:0,refNo:'',paid:'',credit:0,paidNo:'',weightStation:'',profit:0,tpAcc:'',tpAmount:0};
     tpRows.push(row);
     delete tpPendingDates[rid];
   }
@@ -3546,6 +3627,11 @@ function tpFieldChange(el){
     tpUpsertField(rid,field,value);
   }
 
+  // While a drag-fill / bulk-paste is running, tpSuppressAutoRender skips the render/totals work
+  // below for every row (it's redone ONCE at the end by the caller) — same fix Cashbook already
+  // had; TP Entry was missing it, which is what made dragging here feel even slower than Cashbook.
+  if(tpSuppressAutoRender)return;
+
   const q=(document.getElementById('tpSearch')?.value||'').trim();
   const fr=document.getElementById('tpFrom')?.value;
   const to=document.getElementById('tpTo')?.value;
@@ -3641,6 +3727,7 @@ function tpKeyHandler(ev,el,isLastRow){
 }
 
 // ----- Paste a block of cells across rows & columns, mirrors Cashbook's version -----
+let tpSuppressAutoRender=false;
 function tpPasteHandler(ev,el){
   const text=(ev.clipboardData||window.clipboardData).getData('text');
   if(!text||(!text.includes('\t')&&!text.includes('\n')))return;
@@ -3660,6 +3747,8 @@ function tpPasteHandler(ev,el){
     renderTpEntries();
     rids=tpGetRowIds();
   }
+  tpSuppressAutoRender=true;
+  bulkOpActive=true;
   grid.forEach((rowText,ri)=>{
     const targetRid=rids[startRow+ri];
     if(!targetRid)return;
@@ -3673,12 +3762,16 @@ function tpPasteHandler(ev,el){
       if(inp){inp.value=val;tpFieldChange(inp);}
     });
   });
+  tpSuppressAutoRender=false;
+  bulkFlush();
   toast('Data paste ho gaya! ✅','success');
   setTimeout(()=>renderTpEntries(),50);
 }
 
 // ----- Drag-to-fill any column down (Excel-style fill handle), mirrors Cashbook's version -----
 let tpDragState=null;
+let tpDragLastPt=null;
+let tpAutoScrollTimer=null;
 function tpStartDrag(ev,rid,field){
   ev.preventDefault();
   const sourceInput=tpFindInput(rid,field);
@@ -3687,10 +3780,10 @@ function tpStartDrag(ev,rid,field){
   tpDragState={sourceRid:rid,sourceVal,field,active:true};
   document.addEventListener('mousemove',tpDragMove);
   document.addEventListener('mouseup',tpDragEnd);
+  tpAutoScrollTimer=setInterval(tpAutoScrollTick,16);
 }
-function tpDragMove(ev){
-  if(!tpDragState)return;
-  const el=document.elementFromPoint(ev.clientX,ev.clientY);
+function tpUpdateDragTarget(x,y){
+  const el=document.elementFromPoint(x,y);
   const row=el?el.closest('tr[data-rid]'):null;
   document.querySelectorAll('#tpEntryBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
   if(row){
@@ -3704,12 +3797,42 @@ function tpDragMove(ev){
     }
   }
 }
+function tpDragMove(ev){
+  if(!tpDragState)return;
+  tpDragLastPt={x:ev.clientX,y:ev.clientY};
+  tpUpdateDragTarget(ev.clientX,ev.clientY);
+}
+// Excel-jaisa edge auto-scroll — Cashbook wali tick logic ka hi TP Entry version.
+function tpAutoScrollTick(){
+  if(!tpDragState || !tpDragLastPt)return;
+  const wrap=document.getElementById('tpScrollWrap');
+  if(!wrap)return;
+  const rect=wrap.getBoundingClientRect();
+  const edge=48,maxSpeed=22;
+  const y=tpDragLastPt.y;
+  let moved=false;
+  if(y<rect.top+edge && wrap.scrollTop>0){
+    const intensity=Math.min(1,(rect.top+edge-y)/edge);
+    wrap.scrollTop=Math.max(0,wrap.scrollTop-Math.max(3,intensity*maxSpeed));
+    moved=true;
+  }else if(y>rect.bottom-edge && wrap.scrollTop+wrap.clientHeight<wrap.scrollHeight){
+    const intensity=Math.min(1,(y-(rect.bottom-edge))/edge);
+    wrap.scrollTop=Math.min(wrap.scrollHeight-wrap.clientHeight,wrap.scrollTop+Math.max(3,intensity*maxSpeed));
+    moved=true;
+  }
+  if(moved)tpUpdateDragTarget(tpDragLastPt.x,tpDragLastPt.y);
+}
 function tpDragEnd(){
   document.removeEventListener('mousemove',tpDragMove);
   document.removeEventListener('mouseup',tpDragEnd);
+  clearInterval(tpAutoScrollTimer);
+  tpAutoScrollTimer=null;
+  tpDragLastPt=null;
   if(tpDragState && tpDragState.allRows && tpDragState.targetIdx>-1){
     const {allRows,srcIdx,targetIdx,sourceVal,field}=tpDragState;
     const lo=Math.min(srcIdx,targetIdx),hi=Math.max(srcIdx,targetIdx);
+    tpSuppressAutoRender=true;
+    bulkOpActive=true;
     for(let k=lo;k<=hi;k++){
       const r=allRows[k];
       const input=r.querySelector(`input[data-field="${field}"]`);
@@ -3718,6 +3841,8 @@ function tpDragEnd(){
         tpFieldChange(input);
       }
     }
+    tpSuppressAutoRender=false;
+    bulkFlush();
     toast('Value '+(hi-lo)+' rows mein copy ho gayi! ✅','success');
   }
   document.querySelectorAll('#tpEntryBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
@@ -3819,7 +3944,7 @@ function obEnsureMinRows(rows){
   }
   for(let i=0;i<blanksNeeded;i++){
     const id=obBlankPool[i];
-    rows.push({id,date:obPendingDates[id]||'',debitAcc:'',debitAmt:'',creditAcc:'',creditAmt:'',desc:'',paidNo:'',blank:true});
+    rows.push({id,date:obPendingDates[id]||globalEntryDate||'',debitAcc:'',debitAmt:'',creditAcc:'',creditAmt:'',desc:'',paidNo:'',blank:true});
   }
   return rows;
 }
