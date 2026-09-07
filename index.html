@@ -576,6 +576,7 @@
             <div class="entry-toolbar-divider"></div>
             <button class="btn btn-primary btn-sm" onclick="printCashbook()" data-i18n="print">🖨️ Print</button>
           </div>
+          <div id="cbOlderBanner"></div>
           <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
             Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. <b>Description</b> khud ba khud account names + <b>Type</b> (Cash/Transfer/Paid) se ban jati hai — <b>Note</b> box mein jo likhenge wo () mein band hokar aakhir mein add ho jayega. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi (Excel jaisa). Ya <b>Ctrl+D</b> dabayein taake upar wali row ki value seedha copy ho jaye. Agar Baqaya aur Jama <b>do alag Paid Accounts</b> hon (jaise ek se dusre mein transfer), toh <b>Paid No</b> box khali chhod kar seedha dono ka asal <b>account naam</b> Baqaya/Jama cells mein likhein — dono khud apne Paid Account se link ho jayenge.
           </span></div>
@@ -1511,8 +1512,9 @@ function attachCloudSync(){
       }
       DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);DB.set('cargo_recycle',recycleBin);
       DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);DB.set('summary_top_accounts',summaryTopAccounts);DB.set('cargo_tp_rows',tpRows);DB.set('cargo_ob_rows',obRows);
-      refreshUIAfterCloudChange();
       fbApplyingRemote=false;
+      reconcileMissingAccounts();
+      refreshUIAfterCloudChange();
       setSyncBadge('connected');
     }else if(!snap.metadata.fromCache){
       // Confirmed by the SERVER (not the offline cache) that this account has no cloud data yet —
@@ -1735,6 +1737,9 @@ let tpRows = DB.get("cargo_tp_rows",[]);
 let obRows = DB.get("cargo_ob_rows",[]);
 let currentPARTab = 'tyre';
 let currentPARMonth = new Date().toISOString().slice(0,7);
+// Restore the Profit Account into the Accounts List if an earlier cleanup ever removed it while
+// it was still referenced by cfg/entries (see reconcileMissingAccounts below for why).
+if(typeof reconcileMissingAccounts==='function')reconcileMissingAccounts();
 
 // HELPERS
 function uid(){return Date.now().toString(36)+Math.random().toString(36).substr(2);}
@@ -2251,9 +2256,28 @@ function renameAccountEverywhere(oldName,newName){
 }
 function autoAddAcc(name){if(!name)return;if(paidAccounts.find(a=>a.name.toLowerCase()===name.toLowerCase()))return;// paid account names skip
   if(!accounts.find(a=>a.name.toLowerCase()===name.toLowerCase())){accounts.push({id:uid(),name,phone:'',address:''});save();updateAccLists();}}
+// Self-heal: the account currently configured as the Party & Paid Entry "Profit Account" is
+// referenced by name in cfg.profitAccount and in every auto-generated profit ledger entry — but it
+// can still be removed from the Accounts List (chart of accounts) via deleteAcc(), e.g. during
+// cleanup. When that happens, Summary keeps working fine (it reads straight from the ledger
+// entries), but the Accounts List page silently stops showing it, because that page only lists
+// what's in the `accounts` array. Restore it here so it can never just quietly disappear.
+function reconcileMissingAccounts(){
+  if(!cfg.profitAccount)return false;
+  const exists=accounts.find(a=>(a.name||'').trim().toLowerCase()===cfg.profitAccount.trim().toLowerCase());
+  if(exists)return false;
+  accounts.push({id:uid(),name:cfg.profitAccount,phone:'',address:''});
+  DB.set('cargo_accounts',accounts);
+  pushToCloud({accounts});
+  return true;
+}
 function deleteAcc(id){
   if(!confirm('Yeh account delete karna chahte hain? (Recycle Bin mein jayega)'))return;
   const a=accounts.find(x=>x.id===id);
+  if(a && cfg.profitAccount && a.name.trim().toLowerCase()===cfg.profitAccount.trim().toLowerCase()){
+    toast('Ye account abhi "Profit Account" (Party & Paid Entry) ke taur par set hai — pehle wahan se koi doosra account select karein, phir isay delete karein.','error');
+    return;
+  }
   if(a){
     const copy={...a,deletedAt:new Date().toISOString(),deletedFrom:'account'};
     recycleBin.push(copy);
@@ -2464,6 +2488,12 @@ function printAccDetail(){
 // Each cashbook "row" is one pairId linking exactly one DR entry + one CR entry inside `entries[]`.
 // This keeps Accounts / Dashboard / Summary / Print all working unchanged off the same entries array.
 const CB_MIN_ROWS=15;
+// Default cap on how many REAL (already-saved) rows render when no search/date filter is active —
+// keeps the page fast to open once the ledger grows into the thousands. A visible banner lets the
+// user reveal the full history with one tap; searching or picking a date range always looks across
+// every entry regardless of this cap.
+const CB_DEFAULT_VISIBLE=150;
+let cbShowAllRows=false;
 let cbBlankPool=[]; // stable temp pairIds for not-yet-saved blank rows, so drag-fill / re-render don't lose them
 let cbPendingDates={}; // pairId -> date, for blank rows that have a date set but no entry yet
 // grows when user presses Enter past the last row; never auto-shrinks below CB_MIN_ROWS.
@@ -2697,11 +2727,34 @@ function renderCashbook(){
     return new Date(a.date)-new Date(b.date);
   });
 
+  // When no filter is active and the ledger has grown large, only render the most recent
+  // CB_DEFAULT_VISIBLE real rows by default — building thousands of table rows on every page-open
+  // is what was making Cashbook slow to load. Search/date filters always look at the full history;
+  // this cap only affects the default unfiltered view, and a banner lets the user load everything.
+  let hiddenOlderCount=0;
+  const noFilterActive=!q && !fr && !to;
+  if(noFilterActive && !cbShowAllRows && rows.length>CB_DEFAULT_VISIBLE){
+    hiddenOlderCount=rows.length-CB_DEFAULT_VISIBLE;
+    rows=rows.slice(hiddenOlderCount);
+  }
+
   // pad with blank rows only when no filter is active (so the open page always offers 15 rows to fill)
-  if(!q && !fr && !to){cbEnsureMinRows(rows);}
+  if(noFilterActive){cbEnsureMinRows(rows);}
 
   const tbody=document.getElementById('cashbookBody');
   if(!tbody)return;
+
+  const olderBanner=document.getElementById('cbOlderBanner');
+  if(olderBanner){
+    olderBanner.innerHTML=hiddenOlderCount>0
+      ? `<div style="padding:8px 12px;background:#fef3c7;border:1px solid #f5d98a;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+           <span style="font-size:12px;color:#92400e;">⏳ ${hiddenOlderCount} purani entries chupi hain (speed ke liye) — sirf recent ${CB_DEFAULT_VISIBLE} dikha rahe hain.</span>
+           <button class="btn btn-outline btn-sm" onclick="cbShowAllRows=true;renderCashbook();">📜 Sab Purani Entries Dikhayein</button>
+         </div>`
+      : (cbShowAllRows ? `<div style="padding:6px 12px;background:#eef2f8;border-radius:8px;margin-bottom:8px;display:flex;justify-content:flex-end;">
+           <button class="btn btn-outline btn-sm" onclick="cbShowAllRows=false;renderCashbook();">⚡ Sirf Recent Entries Dikhayein (Fast Mode)</button>
+         </div>` : '');
+  }
 
   if(!rows.length){
     tbody.innerHTML='<tr><td colspan="12" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
