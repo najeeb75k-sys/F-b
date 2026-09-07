@@ -2492,8 +2492,12 @@ const CB_MIN_ROWS=15;
 // keeps the page fast to open once the ledger grows into the thousands. A visible banner lets the
 // user reveal the full history with one tap; searching or picking a date range always looks across
 // every entry regardless of this cap.
-const CB_DEFAULT_VISIBLE=150;
-let cbShowAllRows=false;
+// Default cap on how many REAL (already-saved) rows render when no search/date filter is active —
+// keeps the page fast to open even as the ledger keeps growing every month. A visible banner lets
+// the user load more in chunks; searching or picking a date range always looks at every entry
+// regardless of this cap.
+const CB_DEFAULT_VISIBLE=60;
+let cbVisibleLimit=CB_DEFAULT_VISIBLE;
 let cbBlankPool=[]; // stable temp pairIds for not-yet-saved blank rows, so drag-fill / re-render don't lose them
 let cbPendingDates={}; // pairId -> date, for blank rows that have a date set but no entry yet
 // grows when user presses Enter past the last row; never auto-shrinks below CB_MIN_ROWS.
@@ -2730,11 +2734,14 @@ function renderCashbook(){
   // When no filter is active and the ledger has grown large, only render the most recent
   // CB_DEFAULT_VISIBLE real rows by default — building thousands of table rows on every page-open
   // is what was making Cashbook slow to load. Search/date filters always look at the full history;
-  // this cap only affects the default unfiltered view, and a banner lets the user load everything.
+  // this cap only affects the default unfiltered view, and a banner lets the user load more.
+  // allRowsForTotals keeps every real row (pre-slice) so the Baqaya/Jama/Balance chips at the
+  // bottom always reflect the WHOLE cashbook, never just whatever happens to be visible.
+  const allRowsForTotals=rows;
   let hiddenOlderCount=0;
   const noFilterActive=!q && !fr && !to;
-  if(noFilterActive && !cbShowAllRows && rows.length>CB_DEFAULT_VISIBLE){
-    hiddenOlderCount=rows.length-CB_DEFAULT_VISIBLE;
+  if(noFilterActive && rows.length>cbVisibleLimit){
+    hiddenOlderCount=rows.length-cbVisibleLimit;
     rows=rows.slice(hiddenOlderCount);
   }
 
@@ -2748,13 +2755,36 @@ function renderCashbook(){
   if(olderBanner){
     olderBanner.innerHTML=hiddenOlderCount>0
       ? `<div style="padding:8px 12px;background:#fef3c7;border:1px solid #f5d98a;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-           <span style="font-size:12px;color:#92400e;">⏳ ${hiddenOlderCount} purani entries chupi hain (speed ke liye) — sirf recent ${CB_DEFAULT_VISIBLE} dikha rahe hain.</span>
-           <button class="btn btn-outline btn-sm" onclick="cbShowAllRows=true;renderCashbook();">📜 Sab Purani Entries Dikhayein</button>
+           <span style="font-size:12px;color:#92400e;">⏳ ${hiddenOlderCount} purani entries chupi hain (speed ke liye) — sirf recent ${cbVisibleLimit} dikha rahe hain.</span>
+           <button class="btn btn-outline btn-sm" onclick="cbVisibleLimit+=300;renderCashbook();">📜 300 Aur Purani Entries Dikhayein</button>
          </div>`
-      : (cbShowAllRows ? `<div style="padding:6px 12px;background:#eef2f8;border-radius:8px;margin-bottom:8px;display:flex;justify-content:flex-end;">
-           <button class="btn btn-outline btn-sm" onclick="cbShowAllRows=false;renderCashbook();">⚡ Sirf Recent Entries Dikhayein (Fast Mode)</button>
+      : (cbVisibleLimit>CB_DEFAULT_VISIBLE ? `<div style="padding:6px 12px;background:#eef2f8;border-radius:8px;margin-bottom:8px;display:flex;justify-content:flex-end;">
+           <button class="btn btn-outline btn-sm" onclick="cbVisibleLimit=${CB_DEFAULT_VISIBLE};renderCashbook();">⚡ Sirf Recent Entries Dikhayein (Fast Mode)</button>
          </div>` : '');
   }
+
+  // Precompute Paid-Account lookups ONCE per render instead of scanning the full paidAccounts
+  // array for every single row (that repeated scan — 2 lookups × every visible row — was the
+  // biggest hidden cost in this function; this turns it from rows×paidAccounts into a single pass).
+  const paidByNo=new Map();
+  const paidNameCount=new Map();
+  paidAccounts.forEach(a=>{
+    if(a.paidNo)paidByNo.set(a.paidNo,a);
+    const key=(a.name||'').trim().toLowerCase();
+    paidNameCount.set(key,(paidNameCount.get(key)||0)+1);
+  });
+  const paidByNameUnique=new Map();
+  paidAccounts.forEach(a=>{
+    const key=(a.name||'').trim().toLowerCase();
+    if(paidNameCount.get(key)===1)paidByNameUnique.set(key,a);
+  });
+  const resolvePaidFast=(e,paidValFallback)=>{
+    if(!e)return null;
+    const paidVal=e.paidNo||paidValFallback||'';
+    if(paidVal && paidByNo.has(paidVal))return paidByNo.get(paidVal);
+    if(!e.name)return null;
+    return paidByNameUnique.get(e.name.trim().toLowerCase())||null;
+  };
 
   if(!rows.length){
     tbody.innerHTML='<tr><td colspan="12" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
@@ -2777,8 +2807,8 @@ function renderCashbook(){
     // If Baqaya and Jama each matched a DIFFERENT Paid Account, show both underneath the two
     // boxes so it's clear both sides linked correctly (and to which specific Paid No, when the
     // name is shared by more than one Paid Account).
-    const _drPaidAcc=cbResolvePaidAccountForEntry(r.dr,drPaidNo);
-    const _crPaidAcc=cbResolvePaidAccountForEntry(r.cr,crPaidNo);
+    const _drPaidAcc=resolvePaidFast(r.dr,drPaidNo);
+    const _crPaidAcc=resolvePaidFast(r.cr,crPaidNo);
     const dualPaidHint=(_drPaidAcc && _crPaidAcc && _drPaidAcc.id!==_crPaidAcc.id)
       ? `<div style="font-size:9px;color:#b45309;line-height:1.3;margin-top:2px;white-space:nowrap;" title="Baqaya aur Jama alag-alag Paid Accounts se link hain">B:${_drPaidAcc.paidNo||_drPaidAcc.name} · J:${_crPaidAcc.paidNo||_crPaidAcc.name}</div>`
       : '';
@@ -2823,7 +2853,7 @@ function renderCashbook(){
     </tr>`;
   }).join('') + `<datalist id="cbAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="cbPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist>`;
 
-  const allEntries=rows.flatMap(r=>[r.dr,r.cr]).filter(Boolean);
+  const allEntries=allRowsForTotals.flatMap(r=>[r.dr,r.cr]).filter(Boolean);
   const tdr=allEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   const tcr=allEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const cbBal=Math.abs(tcr-tdr);
