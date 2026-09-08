@@ -565,7 +565,7 @@
             <span class="card-title" data-i18n="cashbookNewEntries">📒 Cashbook</span>
           </div>
           <div class="entry-toolbar no-print">
-            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="cbSearch" placeholder="Account / ref search..." oninput="renderCashbook()"></div>
+            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="cbSearch" placeholder="Account / ref search..." oninput="cbSearchDebounced()"></div>
             <input type="date" id="cbFrom" class="input" style="width:130px;" onchange="renderCashbook()" title="From date">
             <input type="date" id="cbTo" class="input" style="width:130px;" onchange="renderCashbook()" title="To date">
             <button class="btn btn-outline btn-sm" onclick="cbClear()">↺ Clear Filter</button>
@@ -624,7 +624,7 @@
             <span class="card-title">⚖️ Party & Paid Entry</span>
           </div>
           <div class="entry-toolbar no-print">
-            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="tpSearch" placeholder="Account / ref search..." oninput="renderTpEntries()"></div>
+            <div class="srch-wrap" style="min-width:150px;"><span class="si">🔍</span><input type="text" id="tpSearch" placeholder="Account / ref search..." oninput="tpSearchDebounced()"></div>
             <input type="date" id="tpFrom" class="input" style="width:130px;" onchange="renderTpEntries()" title="From date">
             <input type="date" id="tpTo" class="input" style="width:130px;" onchange="renderTpEntries()" title="To date">
             <button class="btn btn-outline btn-sm" onclick="tpClear()">↺ Clear Filter</button>
@@ -634,6 +634,7 @@
             <div class="entry-toolbar-divider"></div>
             <button class="btn btn-primary btn-sm" onclick="printTp()">🖨️ Print</button>
           </div>
+          <div id="tpOlderBanner"></div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;" class="no-print">
             <span style="font-weight:700;font-size:13px;color:#7e22ce;">💰 Profit Account:</span>
             <select id="tpProfitAccSel" class="input" style="width:220px;" onchange="saveProfitAccount()">
@@ -642,10 +643,10 @@
             <span style="font-size:11px;color:var(--text-light);">Har row ka Profit amount isi account mein jama hoga</span>
           </div>
           <div class="entry-hint no-print"><span class="eh-ic">✏️</span><span>
-            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 4 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama) aur TP Account (Jama).
+            Kisi bhi cell par click karein aur type karein — auto-save hoti hai. Aakhri row mein <b>Enter</b> dabane se naya row khud ban jata hai. Kisi bhi cell ke neeche-right corner ko pakar kar drag karein — value neeche tak copy ho jayegi, ya <b>Ctrl+D</b> dabayein. Ye row se 5 ledger entries khud ban jati hain: Party (Baqaya), Paid Account (Jama), Profit Account (Jama), TP Account (Jama) aur Broker Account (Jama).
           </span></div>
           <div class="tbl-wrap tbl-wrap-scroll" id="tpScrollWrap">
-            <table style="table-layout:fixed;min-width:1030px;">
+            <table style="table-layout:fixed;min-width:1190px;">
               <colgroup>
                 <col style="width:28px;">
                 <col style="width:96px;">
@@ -656,6 +657,8 @@
                 <col style="width:78px;">
                 <col style="width:78px;">
                 <col style="width:104px;">
+                <col style="width:78px;">
+                <col style="width:122px;">
                 <col style="width:78px;">
                 <col style="width:122px;">
                 <col style="width:78px;">
@@ -674,6 +677,8 @@
                 <th style="color:#c084fc;">Profit</th>
                 <th style="color:#93c5fd;">TP Account</th>
                 <th style="color:#93c5fd;">TP Amount</th>
+                <th style="color:#fbbf24;">Broker Account</th>
+                <th style="color:#fbbf24;">Amount</th>
                 <th class="no-print"></th>
               </tr></thead>
               <tbody id="tpEntryBody"></tbody>
@@ -1545,15 +1550,25 @@ function attachEntriesSync(){
     if(snap.metadata.hasPendingWrites)return; // our own optimistic echo of a write we just made — already applied locally, nothing to do
     let changed=false;
     fbApplyingRemote=true;
+    // Build an id→index map ONCE per snapshot instead of calling entries.findIndex() (a full scan)
+    // for every single changed doc below. On the very first sync — where every entry arrives as
+    // one big batch of "added" changes — that turned into an O(n²) scan across the whole ledger,
+    // which was a real part of why the app felt slow to open.
+    const idxMap=new Map(entries.map((e,i)=>[e.id,i]));
     snap.docChanges().forEach(chg=>{
       const d=chg.doc.data();
-      const idx=entries.findIndex(e=>e.id===d.id);
+      const idx=idxMap.has(d.id)?idxMap.get(d.id):-1;
       if(chg.type==='removed'){
         cloudEntriesSnapshot[d.id]=undefined;delete cloudEntriesSnapshot[d.id];
-        if(idx>=0){entries.splice(idx,1);changed=true;}
+        if(idx>=0){
+          entries.splice(idx,1);
+          idxMap.delete(d.id);
+          idxMap.forEach((v,k)=>{if(v>idx)idxMap.set(k,v-1);});
+          changed=true;
+        }
       }else{
         cloudEntriesSnapshot[d.id]=JSON.stringify(d);
-        if(idx>=0)entries[idx]=d; else entries.push(d);
+        if(idx>=0)entries[idx]=d; else {entries.push(d);idxMap.set(d.id,entries.length-1);}
         changed=true;
       }
     });
@@ -2239,6 +2254,7 @@ function renameAccountEverywhere(oldName,newName){
     if(matches(r.party)){r.party=newName;tpTouched=true;}
     if(matches(r.paid)){r.paid=newName;tpTouched=true;}
     if(matches(r.tpAcc)){r.tpAcc=newName;tpTouched=true;}
+    if(matches(r.broker)){r.broker=newName;tpTouched=true;}
   });
   let obTouched=false;
   obRows.forEach(r=>{
@@ -2493,11 +2509,33 @@ const CB_MIN_ROWS=15;
 // user reveal the full history with one tap; searching or picking a date range always looks across
 // every entry regardless of this cap.
 // Default cap on how many REAL (already-saved) rows render when no search/date filter is active —
-// keeps the page fast to open even as the ledger keeps growing every month. A visible banner lets
-// the user load more in chunks; searching or picking a date range always looks at every entry
-// regardless of this cap.
+// keeps the page fast to open even as the ledger keeps growing every month. As the user scrolls
+// UP toward the top of the grid (where the older, hidden rows live), bindInfiniteScrollUp below
+// automatically loads more in chunks — so every entry stays reachable by scrolling, it's just not
+// all sitting in the DOM at once on page-open.
 const CB_DEFAULT_VISIBLE=60;
 let cbVisibleLimit=CB_DEFAULT_VISIBLE;
+let cbHiddenOlderCount=0;
+// Generic "load more when scrolled near the top" binder — used by both Cashbook and Party & Paid
+// Entry so old rows never need a manual click to reach, but still aren't all rendered up front.
+function bindInfiniteScrollUp(wrapId,hasMoreFn,loadMoreFn){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap||wrap._infiniteBound)return;
+  wrap._infiniteBound=true;
+  let loading=false;
+  wrap.addEventListener('scroll',()=>{
+    if(loading||!hasMoreFn())return;
+    if(wrap.scrollTop<150){
+      loading=true;
+      const prevHeight=wrap.scrollHeight,prevTop=wrap.scrollTop;
+      loadMoreFn();
+      requestAnimationFrame(()=>{
+        wrap.scrollTop=wrap.scrollHeight-prevHeight+prevTop; // keep the same rows in view instead of jumping
+        loading=false;
+      });
+    }
+  },{passive:true});
+}
 let cbBlankPool=[]; // stable temp pairIds for not-yet-saved blank rows, so drag-fill / re-render don't lose them
 let cbPendingDates={}; // pairId -> date, for blank rows that have a date set but no entry yet
 // grows when user presses Enter past the last row; never auto-shrinks below CB_MIN_ROWS.
@@ -2702,6 +2740,14 @@ function cbClear(){
   document.getElementById('cbTo').value='';
   renderCashbook();
 }
+// Generic debounce: waits until typing pauses for `ms` before actually running `fn` — used on the
+// search boxes so every single keystroke doesn't trigger a full table rebuild over the whole ledger.
+function debounce(fn,ms){
+  let t=null;
+  return function(...args){clearTimeout(t);t=setTimeout(()=>fn.apply(this,args),ms);};
+}
+const cbSearchDebounced=debounce(()=>renderCashbook(),280);
+const tpSearchDebounced=debounce(()=>renderTpEntries(),280);
 
 function renderCashbook(){
   cbAttachFocusGuard();
@@ -2740,10 +2786,12 @@ function renderCashbook(){
   const allRowsForTotals=rows;
   let hiddenOlderCount=0;
   const noFilterActive=!q && !fr && !to;
-  if(noFilterActive && rows.length>cbVisibleLimit){
+  if(rows.length>cbVisibleLimit){
     hiddenOlderCount=rows.length-cbVisibleLimit;
-    rows=rows.slice(hiddenOlderCount);
+    rows=rows.slice(noFilterActive?hiddenOlderCount:0,noFilterActive?undefined:cbVisibleLimit);
   }
+  cbHiddenOlderCount=hiddenOlderCount;
+  bindInfiniteScrollUp('cashbookScrollWrap',()=>cbHiddenOlderCount>0,()=>{cbVisibleLimit+=100;renderCashbook();});
 
   // pad with blank rows only when no filter is active (so the open page always offers 15 rows to fill)
   if(noFilterActive){cbEnsureMinRows(rows);}
@@ -2754,9 +2802,9 @@ function renderCashbook(){
   const olderBanner=document.getElementById('cbOlderBanner');
   if(olderBanner){
     olderBanner.innerHTML=hiddenOlderCount>0
-      ? `<div style="padding:8px 12px;background:#fef3c7;border:1px solid #f5d98a;border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-           <span style="font-size:12px;color:#92400e;">⏳ ${hiddenOlderCount} purani entries chupi hain (speed ke liye) — sirf recent ${cbVisibleLimit} dikha rahe hain.</span>
-           <button class="btn btn-outline btn-sm" onclick="cbVisibleLimit+=300;renderCashbook();">📜 300 Aur Purani Entries Dikhayein</button>
+      ? `<div style="padding:6px 12px;background:#fef3c7;border:1px solid #f5d98a;border-radius:8px;margin-bottom:8px;text-align:center;">
+           <span style="font-size:12px;color:#92400e;">⬆️ Upar scroll karein — ${hiddenOlderCount} ${noFilterActive?'purani entries':'aur matching entries'} khud load ho jayengi. </span>
+           <button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="cbVisibleLimit+=300;renderCashbook();">Ya yahan click karein</button>
          </div>`
       : (cbVisibleLimit>CB_DEFAULT_VISIBLE ? `<div style="padding:6px 12px;background:#eef2f8;border-radius:8px;margin-bottom:8px;display:flex;justify-content:flex-end;">
            <button class="btn btn-outline btn-sm" onclick="cbVisibleLimit=${CB_DEFAULT_VISIBLE};renderCashbook();">⚡ Sirf Recent Entries Dikhayein (Fast Mode)</button>
@@ -3339,7 +3387,14 @@ function cbStartDrag(ev,pid,field,side){
   const sourceInput=document.querySelector(`#cashbookBody input[data-pid="${pid}"][data-field="${field}"][data-side="${side||''}"]`);
   const sourceVal=sourceInput?sourceInput.value:'';
   if(!sourceVal){toast('Pehle value likhein, phir drag karein','error');return;}
-  cbDragState={sourcePid:pid,sourceVal,field,side:side||'',active:true};
+  // Cache the row list + a position index ONCE at drag-start instead of re-querying the whole
+  // table and re-scanning it on every single mousemove — that repeated full-table work (dozens of
+  // times a second while dragging) was what made dragging feel slow/laggy.
+  const allRows=[...document.querySelectorAll('#cashbookBody tr[data-pid]')];
+  const rowIndexMap=new Map(allRows.map((r,i)=>[r,i]));
+  const srcIdx=allRows.findIndex(r=>r.getAttribute('data-pid')===pid);
+  cbDragState={sourcePid:pid,sourceVal,field,side:side||'',active:true,allRows,rowIndexMap,srcIdx,targetIdx:srcIdx,lastLo:srcIdx,lastHi:srcIdx};
+  if(srcIdx>-1)allRows[srcIdx].classList.add('cb-drag-target');
   document.addEventListener('mousemove',cbDragMove);
   document.addEventListener('mouseup',cbDragEnd);
   cbAutoScrollTimer=setInterval(cbAutoScrollTick,16);
@@ -3347,20 +3402,22 @@ function cbStartDrag(ev,pid,field,side){
 // Recomputes the highlighted drag range from whatever row is currently under (x,y). Pulled out of
 // cbDragMove so the auto-scroll ticker can call it too — once the container scrolls under a
 // stationary cursor, the row under the pointer changes even though the mouse itself didn't move.
+// Uses the cached allRows/rowIndexMap from cbStartDrag (no DOM re-query) and only toggles the
+// CHANGED rows between the old and new highlighted range — not the whole table — on every call.
 function cbUpdateDragTarget(x,y){
+  if(!cbDragState || !cbDragState.allRows)return;
   const el=document.elementFromPoint(x,y);
   const row=el?el.closest('tr[data-pid]'):null;
-  document.querySelectorAll('#cashbookBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
-  if(row){
-    const allRows=[...document.querySelectorAll('#cashbookBody tr[data-pid]')];
-    const srcIdx=allRows.findIndex(r=>r.getAttribute('data-pid')===cbDragState.sourcePid);
-    const tgtIdx=allRows.findIndex(r=>r===row);
-    if(srcIdx>-1 && tgtIdx>-1){
-      const lo=Math.min(srcIdx,tgtIdx),hi=Math.max(srcIdx,tgtIdx);
-      for(let k=lo;k<=hi;k++)allRows[k].classList.add('cb-drag-target');
-      cbDragState.targetIdx=tgtIdx;cbDragState.srcIdx=srcIdx;cbDragState.allRows=allRows;
-    }
-  }
+  if(!row)return;
+  const tgtIdx=cbDragState.rowIndexMap.get(row);
+  if(tgtIdx===undefined)return;
+  const {allRows,srcIdx,lastLo,lastHi}=cbDragState;
+  const newLo=Math.min(srcIdx,tgtIdx),newHi=Math.max(srcIdx,tgtIdx);
+  cbDragState.targetIdx=tgtIdx;
+  if(newLo===lastLo && newHi===lastHi)return; // pointer moved but the highlighted range didn't — nothing to redraw
+  for(let k=lastLo;k<=lastHi;k++){if(k<newLo||k>newHi)allRows[k].classList.remove('cb-drag-target');}
+  for(let k=newLo;k<=newHi;k++){if(k<lastLo||k>lastHi)allRows[k].classList.add('cb-drag-target');}
+  cbDragState.lastLo=newLo;cbDragState.lastHi=newHi;
 }
 function cbDragMove(ev){
   if(!cbDragState)return;
@@ -3428,7 +3485,7 @@ let tpDesiredBlankCount=DB.get('cargo_tp_blankcount',TP_MIN_ROWS);
 function tpSaveBlankCounts(){DB.set('cargo_tp_blankcount',tpDesiredBlankCount);}
 let tpRemoteRenderPending=false;
 let tpFocusGuardAttached=false;
-const TP_FIELD_ORDER=['date','party','debit','refNo','paid','credit','paidNo','weightStation','profit','tpAcc','tpAmount'];
+const TP_FIELD_ORDER=['date','party','debit','refNo','paid','credit','paidNo','weightStation','profit','tpAcc','tpAmount','broker','brokerAmount'];
 
 function tpHasActiveFocus(){
   const el=document.activeElement;
@@ -3477,12 +3534,12 @@ function tpEnsureMinRows(rows){
   }
   for(let i=0;i<blanksNeeded;i++){
     const id=tpBlankPool[i];
-    rows.push({id,date:tpPendingDates[id]||globalEntryDate||'',party:'',debit:'',refNo:'',paid:'',credit:'',paidNo:'',weightStation:'',profit:'',tpAcc:'',tpAmount:'',blank:true});
+    rows.push({id,date:tpPendingDates[id]||globalEntryDate||'',party:'',debit:'',refNo:'',paid:'',credit:'',paidNo:'',weightStation:'',profit:'',tpAcc:'',tpAmount:'',broker:'',brokerAmount:'',blank:true});
   }
   return rows;
 }
 
-// Builds/updates the 4 linked ledger entries for one TP row inside the shared `entries[]` array.
+// Builds/updates the 5 linked ledger entries for one TP row inside the shared `entries[]` array.
 function tpSyncRowEntries(row){
   function makeOrUpdate(role,side,name,amount,desc,ref){
     const eid=row.id+'_'+role;
@@ -3504,11 +3561,16 @@ function tpSyncRowEntries(row){
   const partyDesc=[row.paid,row.weightStation].filter(v=>v&&String(v).trim()).join(' - ');
   const paidDesc=[row.weightStation,row.party].filter(v=>v&&String(v).trim()).join(' - ');
   const profitTpDesc=[row.paid,row.party].filter(v=>v&&String(v).trim()).join(' - ');
+  // Broker's description shows which Party + Paid Account the commission came from; its ref
+  // combines the Paid No and Ref No the same way, exactly as requested.
+  const brokerDesc=[row.party,row.paid].filter(v=>v&&String(v).trim()).join(' - ');
+  const brokerRef=[row.paidNo,row.refNo].filter(v=>v&&String(v).trim()).join(' - ');
 
   makeOrUpdate('party','DR',row.party,row.debit,partyDesc,row.paidNo);
   makeOrUpdate('paid','CR',row.paid,row.credit,paidDesc,row.refNo);
   makeOrUpdate('profit','CR',cfg.profitAccount,row.profit,profitTpDesc,row.paidNo);
   makeOrUpdate('tp','CR',row.tpAcc,row.tpAmount,profitTpDesc,row.paidNo);
+  makeOrUpdate('broker','CR',row.broker,row.brokerAmount,brokerDesc,brokerRef);
 
   tpLinkPaidAccount(row);
 }
@@ -3553,14 +3615,15 @@ function tpUpsertField(rid,field,value){
     return;
   }
   if(!row){
-    row={id:rid,date:tpPendingDates[rid]||globalEntryDate||today(),party:'',debit:0,refNo:'',paid:'',credit:0,paidNo:'',weightStation:'',profit:0,tpAcc:'',tpAmount:0};
+    row={id:rid,date:tpPendingDates[rid]||globalEntryDate||today(),party:'',debit:0,refNo:'',paid:'',credit:0,paidNo:'',weightStation:'',profit:0,tpAcc:'',tpAmount:0,broker:'',brokerAmount:0};
     tpRows.push(row);
     delete tpPendingDates[rid];
   }
   row[field]=value;
   const isEmpty=!String(row.party||'').trim() && !String(row.paid||'').trim() && !String(row.tpAcc||'').trim() &&
     !String(row.weightStation||'').trim() && !String(row.refNo||'').trim() && !String(row.paidNo||'').trim() &&
-    !row.debit && !row.credit && !row.profit && !row.tpAmount;
+    !String(row.broker||'').trim() &&
+    !row.debit && !row.credit && !row.profit && !row.tpAmount && !row.brokerAmount;
   if(isEmpty){
     tpRemoveGeneratedEntries(rid);
     tpRows=tpRows.filter(r=>r.id!==rid);
@@ -3590,6 +3653,8 @@ function saveProfitAccount(){
   refreshDash();
 }
 
+let tpVisibleLimit=CB_DEFAULT_VISIBLE;
+let tpHiddenOlderCount=0;
 function renderTpEntries(){
   tpAttachFocusGuard();
   populateProfitAccountSelect();
@@ -3600,7 +3665,7 @@ function renderTpEntries(){
   let rows=tpRows.map(r=>({...r}));
   if(q||fr||to){
     rows=rows.filter(r=>{
-      const hay=[r.party,r.paid,r.tpAcc,r.refNo,r.paidNo,r.weightStation].filter(Boolean).join(' ').toLowerCase();
+      const hay=[r.party,r.paid,r.tpAcc,r.broker,r.refNo,r.paidNo,r.weightStation].filter(Boolean).join(' ').toLowerCase();
       const matchQ=!q||hay.includes(q);
       const matchFr=!fr||(r.date&&r.date>=fr);
       const matchTo=!to||(r.date&&r.date<=to);
@@ -3613,12 +3678,32 @@ function renderTpEntries(){
     if(!b.date)return -1;
     return new Date(a.date)-new Date(b.date);
   });
-  if(!q&&!fr&&!to){tpEnsureMinRows(rows);}
+  const noFilterActive=!q&&!fr&&!to;
+  // Same fast-open + scroll-up-to-load-more pattern as Cashbook — see CB_DEFAULT_VISIBLE above.
+  let hiddenOlderCount=0;
+  if(rows.length>tpVisibleLimit){
+    hiddenOlderCount=rows.length-tpVisibleLimit;
+    rows=rows.slice(noFilterActive?hiddenOlderCount:0,noFilterActive?undefined:tpVisibleLimit);
+  }
+  tpHiddenOlderCount=hiddenOlderCount;
+  bindInfiniteScrollUp('tpScrollWrap',()=>tpHiddenOlderCount>0,()=>{tpVisibleLimit+=100;renderTpEntries();});
+  const olderBanner=document.getElementById('tpOlderBanner');
+  if(olderBanner){
+    olderBanner.innerHTML=hiddenOlderCount>0
+      ? `<div style="padding:6px 12px;background:#fef3c7;border:1px solid #f5d98a;border-radius:8px;margin-bottom:8px;text-align:center;">
+           <span style="font-size:12px;color:#92400e;">⬆️ Upar scroll karein — ${hiddenOlderCount} ${noFilterActive?'purani entries':'aur matching entries'} khud load ho jayengi. </span>
+           <button class="btn btn-outline btn-sm" style="margin-left:6px;" onclick="tpVisibleLimit+=300;renderTpEntries();">Ya yahan click karein</button>
+         </div>`
+      : (tpVisibleLimit>CB_DEFAULT_VISIBLE ? `<div style="padding:6px 12px;background:#eef2f8;border-radius:8px;margin-bottom:8px;display:flex;justify-content:flex-end;">
+           <button class="btn btn-outline btn-sm" onclick="tpVisibleLimit=${CB_DEFAULT_VISIBLE};renderTpEntries();">⚡ Sirf Recent Entries Dikhayein (Fast Mode)</button>
+         </div>` : '');
+  }
+  if(noFilterActive){tpEnsureMinRows(rows);}
 
   const tbody=document.getElementById('tpEntryBody');
   if(!tbody)return;
   if(!rows.length){
-    tbody.innerHTML='<tr><td colspan="13" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
+    tbody.innerHTML='<tr><td colspan="15" style="padding:25px;text-align:center;color:#94a3b8;">Is filter mein koi entry nahi</td></tr>';
     document.getElementById('tpEntryTotals').innerHTML='';
     return;
   }
@@ -3639,6 +3724,8 @@ function renderTpEntries(){
       <td class="cbcell cb-profit"><input type="number" placeholder="0.00" value="${r.profit||''}" data-field="profit" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','profit')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-tp"><input type="text" placeholder="TP Account" value="${r.tpAcc||''}" data-field="tpAcc" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAcc')" title="Drag to copy down"></span></td>
       <td class="cbcell cb-tp"><input type="number" placeholder="0.00" value="${r.tpAmount||''}" data-field="tpAmount" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','tpAmount')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(251,191,36,0.06);"><input type="text" placeholder="Broker Account" value="${r.broker||''}" data-field="broker" data-rid="${r.id}" list="tpAccList" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)" style="color:#b45309;font-weight:600;"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','broker')" title="Drag to copy down"></span></td>
+      <td class="cbcell" style="background:rgba(251,191,36,0.06);"><input type="number" placeholder="0.00" value="${r.brokerAmount||''}" data-field="brokerAmount" data-rid="${r.id}" onblur="tpFieldChange(this)" onkeydown="tpKeyHandler(event,this,${isLast})" onpaste="tpPasteHandler(event,this)"><span class="fill-handle" onmousedown="tpStartDrag(event,'${r.id}','brokerAmount')" title="Drag to copy down"></span></td>
       <td class="no-print" style="text-align:center;">${isReal?`<button class="btn btn-sm btn-danger" style="padding:4px 7px;" onclick="tpDeleteRow('${r.id}')">🗑️</button>`:''}</td>
     </tr>`;
   }).join('') + `<datalist id="tpAccList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist><datalist id="tpPaidNoList">${paidAccounts.map(a=>`<option value="${a.paidNo}">${a.name}</option>`).join('')}</datalist><datalist id="tpPaidAccNameList">${accounts.map(a=>`<option value="${a.name}">`).join('')}${paidAccounts.map(a=>`<option value="${a.name}">`).join('')}</datalist>`;
@@ -3651,17 +3738,19 @@ function tpUpdateTotalsOnly(rowCount,filtered){
   const tCredit=tpRows.reduce((s,r)=>s+(parseFloat(r.credit)||0),0);
   const tProfit=tpRows.reduce((s,r)=>s+(parseFloat(r.profit)||0),0);
   const tTp=tpRows.reduce((s,r)=>s+(parseFloat(r.tpAmount)||0),0);
+  const tBroker=tpRows.reduce((s,r)=>s+(parseFloat(r.brokerAmount)||0),0);
   const el=document.getElementById('tpEntryTotals');
   if(!el)return;
-  // Balance = Party Baqaya minus everything it should have been split into (Paid + Profit + TP).
+  // Balance = Party Baqaya minus everything it should have been split into (Paid + Profit + TP + Broker).
   // Should be 0 when every row is fully accounted for — non-zero shows the farq (difference).
-  const balance=tDebit-(tCredit+tProfit+tTp);
+  const balance=tDebit-(tCredit+tProfit+tTp+tBroker);
   const balCls=Math.abs(balance)<0.005 ? 'et-balance-ok' : 'et-balance-bad';
   el.innerHTML=(filtered ? `<span class="et-chip"><span class="et-label">Rows</span>${rowCount}</span>` : '')
     +`<span class="et-chip et-debit"><span class="et-label">Baqaya</span>${fmt(tDebit)}</span>`
     +`<span class="et-chip et-credit"><span class="et-label">Jama</span>${fmt(tCredit)}</span>`
     +`<span class="et-chip et-profit"><span class="et-label">Profit</span>${fmt(tProfit)}</span>`
     +`<span class="et-chip et-tp"><span class="et-label">TP</span>${fmt(tTp)}</span>`
+    +`<span class="et-chip et-tp"><span class="et-label">Broker</span>${fmt(tBroker)}</span>`
     +`<span class="et-chip ${balCls}"><span class="et-label">Balance</span>${fmt(balance)}</span>`;
 }
 
@@ -3672,7 +3761,7 @@ function tpFieldChange(el){
   const row=el.closest('tr');
   const wasBlank=row && !row.querySelector('.btn-danger');
 
-  if((field==='party'||field==='paid'||field==='tpAcc') && value.trim()){
+  if((field==='party'||field==='paid'||field==='tpAcc'||field==='broker') && value.trim()){
     const val=value.trim();
     const existsInAccounts=accounts.find(a=>a.name.toLowerCase()===val.toLowerCase());
     // Party, Paid Account, and TP Account columns can all reference a name from the separate
@@ -3688,17 +3777,18 @@ function tpFieldChange(el){
   if(field==='date'){
     if(!value){return;}
     tpUpsertField(rid,'date',value);
-  }else if(['debit','credit','profit','tpAmount'].includes(field)){
+  }else if(['debit','credit','profit','tpAmount','brokerAmount'].includes(field)){
     if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     tpUpsertField(rid,field,parseFloat(value)||0);
-    // When credit, profit, or tpAmount changes, auto-update debit to be their sum
-    if((field==='credit' || field==='profit' || field==='tpAmount') && value){
+    // When credit, profit, tpAmount, or brokerAmount changes, auto-update debit to be their sum
+    if((field==='credit' || field==='profit' || field==='tpAmount' || field==='brokerAmount') && value){
       const row2=tpRows.find(r=>r.id===rid);
       if(row2){
         const cr=parseFloat(row2.credit)||0;
         const pf=parseFloat(row2.profit)||0;
         const tp=parseFloat(row2.tpAmount)||0;
-        const newDebit=cr+pf+tp;
+        const br=parseFloat(row2.brokerAmount)||0;
+        const newDebit=cr+pf+tp+br;
         if(newDebit>0){
           tpUpsertField(rid,'debit',newDebit);
           const dbInput=tpFindInput(rid,'debit');
@@ -3860,25 +3950,31 @@ function tpStartDrag(ev,rid,field){
   const sourceInput=tpFindInput(rid,field);
   const sourceVal=sourceInput?sourceInput.value:'';
   if(!sourceVal){toast('Pehle value likhein, phir drag karein','error');return;}
-  tpDragState={sourceRid:rid,sourceVal,field,active:true};
+  const allRows=[...document.querySelectorAll('#tpEntryBody tr[data-rid]')];
+  const rowIndexMap=new Map(allRows.map((r,i)=>[r,i]));
+  const srcIdx=allRows.findIndex(r=>r.getAttribute('data-rid')===rid);
+  tpDragState={sourceRid:rid,sourceVal,field,active:true,allRows,rowIndexMap,srcIdx,targetIdx:srcIdx,lastLo:srcIdx,lastHi:srcIdx};
+  if(srcIdx>-1)allRows[srcIdx].classList.add('cb-drag-target');
   document.addEventListener('mousemove',tpDragMove);
   document.addEventListener('mouseup',tpDragEnd);
   tpAutoScrollTimer=setInterval(tpAutoScrollTick,16);
 }
+// Same fix as Cashbook's cbUpdateDragTarget — cached rows + only toggling the changed range,
+// instead of re-querying and re-scanning the whole table on every mousemove.
 function tpUpdateDragTarget(x,y){
+  if(!tpDragState || !tpDragState.allRows)return;
   const el=document.elementFromPoint(x,y);
   const row=el?el.closest('tr[data-rid]'):null;
-  document.querySelectorAll('#tpEntryBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
-  if(row){
-    const allRows=[...document.querySelectorAll('#tpEntryBody tr[data-rid]')];
-    const srcIdx=allRows.findIndex(r=>r.getAttribute('data-rid')===tpDragState.sourceRid);
-    const tgtIdx=allRows.findIndex(r=>r===row);
-    if(srcIdx>-1 && tgtIdx>-1){
-      const lo=Math.min(srcIdx,tgtIdx),hi=Math.max(srcIdx,tgtIdx);
-      for(let k=lo;k<=hi;k++)allRows[k].classList.add('cb-drag-target');
-      tpDragState.targetIdx=tgtIdx;tpDragState.srcIdx=srcIdx;tpDragState.allRows=allRows;
-    }
-  }
+  if(!row)return;
+  const tgtIdx=tpDragState.rowIndexMap.get(row);
+  if(tgtIdx===undefined)return;
+  const {allRows,srcIdx,lastLo,lastHi}=tpDragState;
+  const newLo=Math.min(srcIdx,tgtIdx),newHi=Math.max(srcIdx,tgtIdx);
+  tpDragState.targetIdx=tgtIdx;
+  if(newLo===lastLo && newHi===lastHi)return;
+  for(let k=lastLo;k<=lastHi;k++){if(k<newLo||k>newHi)allRows[k].classList.remove('cb-drag-target');}
+  for(let k=newLo;k<=newHi;k++){if(k<lastLo||k>lastHi)allRows[k].classList.add('cb-drag-target');}
+  tpDragState.lastLo=newLo;tpDragState.lastHi=newHi;
 }
 function tpDragMove(ev){
   if(!tpDragState)return;
@@ -3963,16 +4059,18 @@ function printTp(){
     <td>${i+1}</td><td>${r.date||''}</td><td>${r.party||''}</td><td style="color:#dc2626;">${fmt(r.debit||0)}</td><td>${r.refNo||''}</td>
     <td>${r.paid||''}</td><td style="color:#15803d;">${fmt(r.credit||0)}</td><td>${r.paidNo||''}</td><td>${PU(r.weightStation)}</td>
     <td style="color:#9333ea;">${fmt(r.profit||0)}</td><td>${r.tpAcc||''}</td><td style="color:#1d4ed8;">${fmt(r.tpAmount||0)}</td>
+    <td>${r.broker||''}</td><td style="color:#b45309;">${fmt(r.brokerAmount||0)}</td>
   </tr>`).join('');
   const tDebit=rows.reduce((s,r)=>s+(parseFloat(r.debit)||0),0);
   const tCredit=rows.reduce((s,r)=>s+(parseFloat(r.credit)||0),0);
   const tProfit=rows.reduce((s,r)=>s+(parseFloat(r.profit)||0),0);
   const tTp=rows.reduce((s,r)=>s+(parseFloat(r.tpAmount)||0),0);
+  const tBroker=rows.reduce((s,r)=>s+(parseFloat(r.brokerAmount)||0),0);
   document.getElementById('printArea').innerHTML=`
     <div class="print-hdr"><h1>${cfg.company}</h1><p>Party & Paid Entry Report | ${new Date().toLocaleDateString('en-PK')}</p></div>
-    <table><thead><tr><th>#</th><th>Date</th><th>Party</th><th>Baqaya</th><th>Ref</th><th>Paid Acc</th><th>Jama</th><th>Paid No</th><th>Weight Station</th><th>Profit</th><th>TP Acc</th><th>TP Amt</th></tr></thead>
-    <tbody>${rowsHtml||'<tr><td colspan="12" style="text-align:center;">No entries</td></tr>'}</tbody>
-    <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tDebit)}</td><td colspan="2"></td><td style="color:#15803d;">${fmt(tCredit)}</td><td colspan="2"></td><td style="color:#9333ea;">${fmt(tProfit)}</td><td></td><td style="color:#1d4ed8;">${fmt(tTp)}</td></tr></tfoot>
+    <table><thead><tr><th>#</th><th>Date</th><th>Party</th><th>Baqaya</th><th>Ref</th><th>Paid Acc</th><th>Jama</th><th>Paid No</th><th>Weight Station</th><th>Profit</th><th>TP Acc</th><th>TP Amt</th><th>Broker Acc</th><th>Broker Amt</th></tr></thead>
+    <tbody>${rowsHtml||'<tr><td colspan="14" style="text-align:center;">No entries</td></tr>'}</tbody>
+    <tfoot><tr style="font-weight:700;"><td colspan="3">TOTAL</td><td style="color:#dc2626;">${fmt(tDebit)}</td><td colspan="2"></td><td style="color:#15803d;">${fmt(tCredit)}</td><td colspan="2"></td><td style="color:#9333ea;">${fmt(tProfit)}</td><td></td><td style="color:#1d4ed8;">${fmt(tTp)}</td><td></td><td style="color:#b45309;">${fmt(tBroker)}</td></tr></tfoot>
     </table>`;
   window.print();
 }
