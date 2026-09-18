@@ -1404,7 +1404,13 @@ const FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.start
 let fbApp=null, fbAuth=null, fbDb=null, fbUser=null, fbUnsub=null, fbEntriesUnsub=null, fbSavePending=false, fbApplyingRemote=false;
 // Last-synced snapshot of each Cashbook entry (id -> JSON string), used to work out which
 // entries actually changed since the last sync so only THOSE get sent — see syncEntriesIncremental().
-let cloudEntriesSnapshot={};
+// Persisted to localStorage (not just kept in memory): if this reset to {} on every page reload,
+// a delete that hadn't reached Firestore yet would look "new" again on the next load and get
+// pushed back into the Cashbook — which is exactly the "deleted entry comes back" bug.
+// (Read directly via localStorage here, not the DB helper below, because DB isn't defined yet
+// at this point in the script — this line runs before that.)
+let cloudEntriesSnapshot=(()=>{try{return JSON.parse(localStorage.getItem('cargo_cloud_entries_snapshot'))||{};}catch(e){return {};}})();
+function saveCloudEntriesSnapshot(){DB.set('cargo_cloud_entries_snapshot',cloudEntriesSnapshot);}
 
 if(FIREBASE_ENABLED){
   try{
@@ -1574,6 +1580,7 @@ function attachEntriesSync(){
     });
     if(changed){
       DB.set('cargo_entries',entries);
+      saveCloudEntriesSnapshot();
       refreshUIAfterCloudChange();
     }
     fbApplyingRemote=false;
@@ -1651,6 +1658,7 @@ function syncEntriesIncremental(){
         if(op.op==='set'){batch.set(col.doc(String(op.id)),op.data);cloudEntriesSnapshot[op.id]=JSON.stringify(op.data);}
         else{batch.delete(col.doc(String(op.id)));delete cloudEntriesSnapshot[op.id];}
       });
+      saveCloudEntriesSnapshot();
       return batch.commit();
     });
   });
@@ -1660,6 +1668,26 @@ function syncEntriesIncremental(){
   });
 }
 
+// Both pushToCloud() and syncEntriesIncremental() wait ~400ms (debounce) before actually sending
+// anything, so a fresh edit sits in memory-only for a moment before it's handed to Firestore.
+// If the tab/app is closed, refreshed, or put in the background in that window (very common on
+// phones — the OS can suspend/kill a backgrounded tab any time), that edit or delete never
+// reaches the cloud at all. Then next time the app opens, the sync listener re-attaches, sees
+// the OLDER cloud version, and silently overwrites the newer local one — which is what wiped
+// Paid No values and brought deleted entries back. Flushing immediately whenever the page is
+// hidden or about to unload closes almost all of that window.
+function flushPendingSyncNow(){
+  if(fbEntriesDirty){clearTimeout(fbEntriesPushTimer);syncEntriesIncremental();}
+  if(fbPendingFields){
+    clearTimeout(fbPushTimer);
+    const payload={...fbPendingFields, updatedAt:new Date().toISOString()};
+    fbPendingFields=null;
+    if(fbUser&&fbDb){fbDb.collection('cargo_data').doc(fbUser.uid).set(payload,{merge:true}).catch(()=>{});}
+  }
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushPendingSyncNow();});
+window.addEventListener('pagehide',flushPendingSyncNow);
+window.addEventListener('beforeunload',flushPendingSyncNow);
 
 if(FIREBASE_ENABLED && fbAuth){
   fbAuth.onAuthStateChanged(user=>{
@@ -1879,6 +1907,7 @@ function doLogout(){
     if(fbUnsub){fbUnsub();fbUnsub=null;}
     if(fbEntriesUnsub){fbEntriesUnsub();fbEntriesUnsub=null;}
     cloudEntriesSnapshot={}; // so a different account signing in on this device doesn't diff against the wrong account's entries
+    saveCloudEntriesSnapshot();
     if(FIREBASE_ENABLED&&fbAuth&&fbAuth.currentUser){fbAuth.signOut().catch(()=>{});}
     fbUser=null;
     isStaffUser=false;
