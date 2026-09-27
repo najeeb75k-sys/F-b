@@ -116,8 +116,8 @@
   @media(max-width:768px){.menu-btn{display:block;}}
 
   .app-layout{display:flex;min-height:calc(100vh - 56px);}
-  .sidebar{width:222px;background:linear-gradient(190deg,var(--primary-dark),var(--primary) 70%);padding:18px 0;flex-shrink:0;border-right:1px solid rgba(255,255,255,.05);}
-  @media(max-width:768px){.sidebar{position:fixed;left:-222px;top:56px;bottom:0;z-index:200;transition:left .3s;box-shadow:4px 0 24px rgba(0,0,0,.35);overflow-y:auto;}.sidebar.open{left:0;}}
+  .sidebar{width:222px;background:linear-gradient(190deg,var(--primary-dark),var(--primary) 70%);padding:18px 0;flex-shrink:0;border-right:1px solid rgba(255,255,255,.05);position:sticky;top:56px;align-self:flex-start;height:calc(100vh - 56px);overflow-y:auto;}
+  @media(max-width:768px){.sidebar{position:fixed;left:-222px;top:56px;bottom:0;height:auto;z-index:200;transition:left .3s;box-shadow:4px 0 24px rgba(0,0,0,.35);overflow-y:auto;}.sidebar.open{left:0;}}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(4,12,24,.5);backdrop-filter:blur(2px);z-index:150;}
   .sidebar-overlay.open{display:block;}
   .nav-sec{padding:10px 20px 5px;font-size:10px;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:1.8px;margin-top:6px;font-weight:700;}
@@ -3481,6 +3481,12 @@ function cbDragEnd(){
   clearInterval(cbAutoScrollTimer);
   cbAutoScrollTimer=null;
   cbDragLastPt=null;
+  // Remember exactly where the grid was scrolled to right as the drag finished — renderCashbook()
+  // below rebuilds the table (and can re-sort rows, e.g. when the dragged field is the date), which
+  // otherwise leaves the view jumped away from where the user was actually working.
+  const cbDragWrap=document.getElementById('cashbookScrollWrap');
+  const cbDragSavedTop=cbDragWrap?cbDragWrap.scrollTop:null;
+  const cbDragSavedLeft=cbDragWrap?cbDragWrap.scrollLeft:null;
   if(cbDragState && cbDragState.allRows && cbDragState.targetIdx>-1){
     const {allRows,srcIdx,targetIdx,sourceVal,field,side}=cbDragState;
     const lo=Math.min(srcIdx,targetIdx),hi=Math.max(srcIdx,targetIdx);
@@ -3501,6 +3507,9 @@ function cbDragEnd(){
   document.querySelectorAll('#cashbookBody tr').forEach(r=>r.classList.remove('cb-drag-target'));
   cbDragState=null;
   renderCashbook();
+  if(cbDragWrap && cbDragSavedTop!=null){
+    requestAnimationFrame(()=>{cbDragWrap.scrollTop=cbDragSavedTop;cbDragWrap.scrollLeft=cbDragSavedLeft;});
+  }
 }
 
 // ===================== TP ENTRY (single row → 4 auto ledger entries) =====================
