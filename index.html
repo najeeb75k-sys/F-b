@@ -375,6 +375,15 @@
     table{border-collapse:collapse!important;}
     th,td{border:1px solid #cbd5e1!important;}
   }
+  /* Print — repeat the company header on EVERY printed page.
+     beforeprint moves .print-hdr into the table's <thead> (as its first row); browsers
+     repeat <thead> on each page natively, so the header + column titles show on all pages. */
+  @media print {
+    thead{display:table-header-group;}
+    tr{break-inside:avoid;page-break-inside:avoid;}
+    #printArea thead th.print-hdr-cell{background:#fff!important;color:#122A4A!important;border:0!important;padding:0 0 6px 0!important;text-align:center;font-weight:normal;}
+    #printArea thead th.print-hdr-cell .print-hdr{margin-bottom:0;}
+  }
   /* Print — Summary page: everything stays in its normal one-after-another order.
      column-fill:auto fills the FIRST column completely to the bottom, then continues
      into the second column, and only moves to a new printed page once both columns
@@ -5671,6 +5680,36 @@ function printPaidDetail(){
     </table>`;
   window.print();
 }
+
+// Repeat print header on every printed page (header goes inside <thead> while printing)
+(function(){
+  let moved=null;
+  function putHeaderInThead(){
+    const pa=document.getElementById('printArea');
+    if(!pa||moved)return;
+    const hdr=pa.querySelector(':scope > .print-hdr');
+    const table=pa.querySelector(':scope > table');
+    if(!hdr||!table||!table.tHead||!table.tHead.rows.length)return;
+    let cols=0;
+    Array.from(table.tHead.rows[0].cells).forEach(c=>cols+=(c.colSpan||1));
+    const tr=table.tHead.insertRow(0);
+    tr.className='print-hdr-row';
+    const th=document.createElement('th');
+    th.colSpan=cols;th.className='print-hdr-cell';
+    th.appendChild(hdr);
+    tr.appendChild(th);
+    moved={pa,hdr,tr};
+  }
+  function restoreHeader(){
+    if(!moved)return;
+    const {pa,hdr,tr}=moved;
+    pa.insertBefore(hdr,pa.firstChild);
+    tr.remove();
+    moved=null;
+  }
+  window.addEventListener('beforeprint',putHeaderInThead);
+  window.addEventListener('afterprint',restoreHeader);
+})();
 
 // Apply saved language immediately on page load (covers the login screen too)
 applyLanguage();
