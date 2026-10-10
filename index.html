@@ -1176,7 +1176,7 @@
     <div class="modal-hdr"><span class="modal-title" id="paidAccModalTitle">💳 Add Paid Account</span><button class="modal-close" onclick="closeModal('paidAccModal')">✕</button></div>
     <input type="hidden" id="editPaidAccId">
     <div class="form-row">
-      <div class="fg"><label>Account Name *</label><input type="text" class="input" id="paidAccName" placeholder="Account name"></div>
+      <div class="fg"><label>Account Name *</label><input type="text" class="input" id="paidAccName" placeholder="P-ABC-123" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="paidAccNameFormat(this)"></div>
       <div class="fg"><label>Paid No *</label><input type="text" class="input" id="paidAccNo" placeholder="Paid number"></div>
     </div>
     <div class="fg" style="margin-bottom:16px;"><label>Phone</label><input type="text" class="input" id="paidAccPhone" placeholder="03XX-XXXXXXX"></div>
@@ -5462,13 +5462,37 @@ function printPaidAccountsList(){
   window.print();
 }
 
+// Next free Paid No for a NEW Paid Account: starts at 14401, then goes up by one (or max existing + 1 if higher).
+function nextPaidNo(){
+  let max=0;
+  paidAccounts.forEach(a=>{const s=String(a.paidNo||'').trim();if(/^\d+$/.test(s)){const n=parseInt(s,10);if(n>max)max=n;}});
+  return String(Math.max(14401,max+1));
+}
+// Name format while ADDING: "P-" + English letters + "-" + number  (e.g. P-TMV-684).
+// You type only the letters; "P-" is already there and the "-" after the letters is added automatically
+// (cursor stays before it while you type letters). Type digits and they go after the "-".
+function paidAccNameFormat(inp){
+  if(document.getElementById('editPaidAccId').value)return; // only when adding a new account, not editing
+  const raw=inp.value.toUpperCase();
+  const rest=raw.startsWith('P-')?raw.slice(2):((raw==='P'||raw==='')?'':raw);
+  let letters='',digits='';
+  for(const c of rest){
+    if(/[A-Z]/.test(c)&&!digits)letters+=c;
+    else if(/[0-9]/.test(c))digits+=c;
+  }
+  const out='P-'+letters+(letters?'-':'')+digits;
+  if(inp.value!==out)inp.value=out;
+  const pos=(letters&&!digits)?2+letters.length:out.length; // keep the cursor before the "-" while typing letters
+  try{inp.setSelectionRange(pos,pos);}catch(e){}
+}
 function openAddPaidAcc(){
   document.getElementById('paidAccModalTitle').textContent='💳 Add Paid Account';
   document.getElementById('editPaidAccId').value='';
-  document.getElementById('paidAccName').value='';
-  document.getElementById('paidAccNo').value='';
+  document.getElementById('paidAccName').value='P-';
+  document.getElementById('paidAccNo').value=nextPaidNo();
   document.getElementById('paidAccPhone').value='';
   openModal('paidAccModal');
+  setTimeout(()=>{const n=document.getElementById('paidAccName');if(n){n.focus();try{n.setSelectionRange(2,2);}catch(e){}}},60);
 }
 function openEditPaidAcc(id){
   const a=paidAccounts.find(x=>x.id===id);if(!a)return;
@@ -5628,6 +5652,7 @@ function savePaidAccModal(){
   if(!name){toast('Account name darain!','error');return;}
   if(!paidNo){toast('Paid No darain!','error');return;}
   const id=document.getElementById('editPaidAccId').value;
+  if(!id && /^P-[A-Z]*-?$/.test(name) && !confirm('Naam "'+name+'" mein number nahi hai (jaise P-TMV-684). Phir bhi save karein?'))return;
   // Paid No must be unique — duplicate numbers cause cashbook entries to silently link to the wrong account
   const dupe=paidAccounts.find(a=>a.paidNo===paidNo && a.id!==id);
   if(dupe){toast('Yeh Paid No "'+paidNo+'" pehle se "'+dupe.name+'" ke account mein use ho raha hai! Alag Paid No darain.','error');return;}
