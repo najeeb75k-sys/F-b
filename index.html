@@ -1044,6 +1044,10 @@
               Cashbook, Party & Paid Entry, aur Opening Balance ki har entry ka Paid Account link ek hi click mein dobara refresh/recompute kar dega — kisi ek-ek row ko khol kar dobara tap karne ki zaroorat nahi.
             </div>
             <button class="btn btn-primary btn-sm" onclick="refreshAllPaidLinks()">🔄 Sab Paid Account Links Refresh Karein</button>
+            <div style="font-size:12px;color:#075985;margin:14px 0 12px;border-top:1px solid #bae6fd;padding-top:12px;">
+              Agar Baqaya/Jama mein thoda sa farq aa raha ho (jaise 1 rupee), to ye wo ledger entries dhoondta hai jin ki Party &amp; Paid / Opening Balance row delete ho chuki hai, aur aap ki tasdeeq ke baad unhein hata deta hai.
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="repairOrphanEntries()">🔧 Farq / Orphan Entries Check &amp; Repair</button>
           </div>
 
           <!-- RECYCLE BIN -->
@@ -3359,6 +3363,12 @@ function cbFocusCell(pid,colIdx){
   if(inp){inp.focus();if(inp.select)inp.select();return true;}
   return false;
 }
+// See tpFocusBelow: focus by row id, not by index, because the grid may re-render after blur.
+function cbFocusBelow(pid,nextPid,colIdx){
+  if(nextPid && cbFocusCell(nextPid,colIdx))return;
+  const ids=cbGetRowPids();const i=ids.indexOf(pid);
+  if(i>=0)cbFocusCell(ids[i+1],colIdx);
+}
 function cbKeyHandler(ev,el,isLastRow){
   const pid=el.getAttribute('data-pid');
   const side=el.getAttribute('data-side')||'';
@@ -3366,6 +3376,7 @@ function cbKeyHandler(ev,el,isLastRow){
   const colIdx=CB_FIELD_ORDER.findIndex(d=>d.side===side&&d.field===field);
   const pids=cbGetRowPids();
   const rowIdx=pids.indexOf(pid);
+  const nextPid=pids[rowIdx+1]; // row directly below BEFORE the edit
   const hasDatalist=!!el.getAttribute('list'); // account name / paid no — needs native arrow keys for its suggestion list
 
   // Ctrl+D (or Cmd+D on Mac) — Excel-style "fill down": copy the same column's value from the row
@@ -3399,8 +3410,7 @@ function cbKeyHandler(ev,el,isLastRow){
       }
     }else{
       // Enter on any other row → move straight down to the same field in the next row (Excel-style)
-      const newPids=cbGetRowPids();
-      cbFocusCell(newPids[rowIdx+1],colIdx);
+      cbFocusBelow(pid,nextPid,colIdx);
     }
     return;
   }
@@ -3410,7 +3420,7 @@ function cbKeyHandler(ev,el,isLastRow){
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      const newPids=cbGetRowPids();cbFocusCell(newPids[rowIdx+1],colIdx);
+      cbFocusBelow(pid,nextPid,colIdx);
     }else if(ev.key==='ArrowUp'){
       if(rowIdx>0){ev.preventDefault();el.blur();cbFocusCell(pids[rowIdx-1],colIdx);}
     }
@@ -3433,8 +3443,7 @@ function cbKeyHandler(ev,el,isLastRow){
   if(ev.key==='ArrowDown'){
     ev.preventDefault();
     el.blur();
-    const newPids=cbGetRowPids();
-    cbFocusCell(newPids[rowIdx+1],colIdx);
+    cbFocusBelow(pid,nextPid,colIdx);
   }else if(ev.key==='ArrowUp'){
     if(rowIdx>0){
       ev.preventDefault();
@@ -3920,20 +3929,21 @@ function tpFieldChange(el){
     tpUpsertField(rid,'date',value);
   }else if(['debit','credit','profit','tpAmount','brokerAmount'].includes(field)){
     if(value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
-    tpUpsertField(rid,field,parseFloat(value)||0);
-    // When credit, profit, tpAmount, or brokerAmount changes, auto-update debit to be their sum
-    if((field==='credit' || field==='profit' || field==='tpAmount' || field==='brokerAmount') && value){
+    const prevRow=tpRows.find(r=>r.id===rid);
+    const prevVal=prevRow?(parseFloat(prevRow[field])||0):0;
+    const newVal=parseFloat(value)||0;
+    tpUpsertField(rid,field,newVal);
+    // Baqaya (debit) = Jama + Profit + TP Amount + Broker Amount. Recalculated whenever one of those parts REALLY
+    // changed — including when a part is lowered/cleared (before, clearing a field left Baqaya stale). Merely
+    // tabbing through an untouched field does not overwrite a Baqaya the user typed by hand.
+    if(field!=='debit' && newVal!==prevVal){
       const row2=tpRows.find(r=>r.id===rid);
       if(row2){
-        const cr=parseFloat(row2.credit)||0;
-        const pf=parseFloat(row2.profit)||0;
-        const tp=parseFloat(row2.tpAmount)||0;
-        const br=parseFloat(row2.brokerAmount)||0;
-        const newDebit=cr+pf+tp+br;
-        if(newDebit>0){
-          tpUpsertField(rid,'debit',newDebit);
+        const sum=Math.round(((parseFloat(row2.credit)||0)+(parseFloat(row2.profit)||0)+(parseFloat(row2.tpAmount)||0)+(parseFloat(row2.brokerAmount)||0))*100)/100;
+        if(sum>0 || prevVal>0){
+          if((parseFloat(row2.debit)||0)!==sum)tpUpsertField(rid,'debit',sum);
           const dbInput=tpFindInput(rid,'debit');
-          if(dbInput)dbInput.value=newDebit.toString();
+          if(dbInput)dbInput.value=sum>0?sum.toString():'';
         }
       }
     }
@@ -3970,12 +3980,21 @@ function tpFocusCell(rid,colIdx){
   if(inp){inp.focus();if(inp.select)inp.select();return true;}
   return false;
 }
+// After blur the grid can re-render (a blank row turns into a real row, the "show last N rows" window slides
+// by one, rows re-sort by date) so an INDEX taken before the edit points one row too far -> focus jumped
+// 2 rows. Focus the row by its id instead (the id of the row that was directly below before the edit).
+function tpFocusBelow(rid,nextRid,colIdx){
+  if(nextRid && tpFocusCell(nextRid,colIdx))return;
+  const ids=tpGetRowIds();const i=ids.indexOf(rid);
+  if(i>=0)tpFocusCell(ids[i+1],colIdx);
+}
 function tpKeyHandler(ev,el,isLastRow){
   const rid=el.getAttribute('data-rid');
   const field=el.getAttribute('data-field');
   const colIdx=TP_FIELD_ORDER.indexOf(field);
   const rids=tpGetRowIds();
   const rowIdx=rids.indexOf(rid);
+  const nextRid=rids[rowIdx+1]; // row directly below BEFORE the edit (a re-render may re-sort/slide the list)
   const hasDatalist=!!el.getAttribute('list');
 
   // Ctrl+D (or Cmd+D) — fill down from the row directly above, same as Cashbook.
@@ -4003,14 +4022,14 @@ function tpKeyHandler(ev,el,isLastRow){
       const newRow=allRows[allRows.length-1];
       if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
     }else{
-      const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
+      tpFocusBelow(rid,nextRid,colIdx);
     }
     return;
   }
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
+      tpFocusBelow(rid,nextRid,colIdx);
     }else if(ev.key==='ArrowUp'){
       if(rowIdx>0){ev.preventDefault();el.blur();tpFocusCell(rids[rowIdx-1],colIdx);}
     }
@@ -4028,7 +4047,7 @@ function tpKeyHandler(ev,el,isLastRow){
   }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
-    const newRids=tpGetRowIds();tpFocusCell(newRids[rowIdx+1],colIdx);
+    tpFocusBelow(rid,nextRid,colIdx);
   }else if(ev.key==='ArrowUp'){
     if(rowIdx>0){ev.preventDefault();el.blur();tpFocusCell(rids[rowIdx-1],colIdx);}
   }else if(ev.key==='ArrowRight'){
@@ -4484,12 +4503,19 @@ function obFocusCell(rid,colIdx){
   if(inp){inp.focus();if(inp.select)inp.select();return true;}
   return false;
 }
+// See tpFocusBelow: focus by row id, not by index, because the grid may re-render after blur.
+function obFocusBelow(rid,nextRid,colIdx){
+  if(nextRid && obFocusCell(nextRid,colIdx))return;
+  const ids=obGetRowIds();const i=ids.indexOf(rid);
+  if(i>=0)obFocusCell(ids[i+1],colIdx);
+}
 function obKeyHandler(ev,el,isLastRow){
   const rid=el.getAttribute('data-rid');
   const field=el.getAttribute('data-field');
   const colIdx=OB_FIELD_ORDER.indexOf(field);
   const rids=obGetRowIds();
   const rowIdx=rids.indexOf(rid);
+  const nextRid=rids[rowIdx+1]; // row directly below BEFORE the edit
   const hasDatalist=!!el.getAttribute('list');
 
   if(ev.key==='Enter'){
@@ -4503,14 +4529,14 @@ function obKeyHandler(ev,el,isLastRow){
       const newRow=allRows[allRows.length-1];
       if(newRow){const dateInput=newRow.querySelector('input[data-field="date"]');if(dateInput)dateInput.focus();}
     }else{
-      const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
+      obFocusBelow(rid,nextRid,colIdx);
     }
     return;
   }
   if(el.type==='date'){
     if(ev.key==='ArrowDown'){
       ev.preventDefault();el.blur();
-      const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
+      obFocusBelow(rid,nextRid,colIdx);
     }else if(ev.key==='ArrowUp'){
       if(rowIdx>0){ev.preventDefault();el.blur();obFocusCell(rids[rowIdx-1],colIdx);}
     }
@@ -4528,7 +4554,7 @@ function obKeyHandler(ev,el,isLastRow){
   }
   if(ev.key==='ArrowDown'){
     ev.preventDefault();el.blur();
-    const newRids=obGetRowIds();obFocusCell(newRids[rowIdx+1],colIdx);
+    obFocusBelow(rid,nextRid,colIdx);
   }else if(ev.key==='ArrowUp'){
     if(rowIdx>0){ev.preventDefault();el.blur();obFocusCell(rids[rowIdx-1],colIdx);}
   }else if(ev.key==='ArrowRight'){
@@ -5465,6 +5491,26 @@ function openEditPaidAcc(id){
 // get it to re-link, which is what a single row re-triggering itself into place suggested was
 // needed. Safe to run any time: it just recomputes each row's link from its current data, it
 // doesn't change dates/amounts/names.
+
+// Ledger entries generated from a Party&Paid / Opening Balance row whose row no longer exists ("orphans").
+// They still count in Accounts / Summary, which is how a stray 1 rupee Jama (no matching Baqaya) can appear.
+function repairOrphanEntries(){
+  if(FIREBASE_ENABLED && fbUser && !fbIsFullySynced()){toast('Pehle sync poora hone dein (🟢 Synced), phir dobara try karein','error');return;}
+  const tpIds=new Set(tpRows.map(r=>r.id)), obIds=new Set(obRows.map(r=>r.id));
+  const orphans=entries.filter(e=>(e.tpRowId&&!tpIds.has(e.tpRowId))||(e.obRowId&&!obIds.has(e.obRowId)));
+  if(!orphans.length){toast('Koi orphan entry nahi mili — sab theek hai ✅','success');return;}
+  const lines=orphans.slice(0,10).map(e=>'• '+(e.date||'')+' | '+e.name+' | '+(e.type==='DR'?'Baqaya ':'Jama ')+e.amount).join('\n');
+  if(!confirm(orphans.length+' orphan entry mili (jin ki Party&Paid/Opening Balance row maujood nahi):\n\n'+lines+(orphans.length>10?'\n...':'')+'\n\nInhein delete kar dein?'))return;
+  const ids=new Set(orphans.map(e=>e.id));
+  const before=paidEntries.length;
+  paidEntries=paidEntries.filter(pe=>!ids.has(pe.cashbookRef));
+  entries=entries.filter(e=>!ids.has(e.id));
+  save();
+  if(paidEntries.length!==before)savePaid();
+  refreshUIAfterCloudChange();
+  toast(orphans.length+' orphan entry delete ho gayi ✅','success');
+}
+
 function refreshAllPaidLinks(){
   if(!confirm('Cashbook, Party & Paid Entry, aur Opening Balance ki tamam entries ke Paid Account links dobara refresh honge. Continue karein?'))return;
   const cbPids=new Set();
