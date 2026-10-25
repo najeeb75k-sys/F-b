@@ -1423,7 +1423,28 @@ let fbApp=null, fbAuth=null, fbDb=null, fbUser=null, fbUnsub=null, fbEntriesUnsu
 // (Read directly via localStorage here, not the DB helper below, because DB isn't defined yet
 // at this point in the script — this line runs before that.)
 let cloudEntriesSnapshot=(()=>{try{return JSON.parse(localStorage.getItem('cargo_cloud_entries_snapshot'))||{};}catch(e){return {};}})();
-function saveCloudEntriesSnapshot(){DB.set('cargo_cloud_entries_snapshot',cloudEntriesSnapshot);}
+// ---- Deferred localStorage persistence ----
+// Pehle har cell edit par poora entries/accounts/paidEntries/snapshot JSON.stringify ho kar localStorage mein
+// likha jata tha (synchronously, typing ke beech). Ab changes ko 300ms ke liye jama karke EK baar likhte hain.
+// Page chhupne/band hone par foran flush hota hai, is liye data nahi jata.
+var _pDirty={}, _pTimer=null, _PGET={};
+function persistLater(keys){
+  keys.forEach(function(k){_pDirty[k]=1;});
+  clearTimeout(_pTimer);
+  _pTimer=setTimeout(persistFlushNow,300);
+}
+function persistFlushNow(){
+  clearTimeout(_pTimer);_pTimer=null;
+  var d=_pDirty;_pDirty={};
+  Object.keys(d).forEach(function(k){
+    try{ if(_PGET[k])localStorage.setItem(k,JSON.stringify(_PGET[k]())); }
+    catch(e){console.error('persist failed',k,e);}
+  });
+}
+document.addEventListener('visibilitychange',function(){if(document.hidden)persistFlushNow();});
+window.addEventListener('pagehide',persistFlushNow);
+window.addEventListener('beforeunload',persistFlushNow);
+function saveCloudEntriesSnapshot(){persistLater(['cargo_cloud_entries_snapshot']);}
 
 if(FIREBASE_ENABLED){
   try{
@@ -1970,10 +1991,18 @@ function bulkFlush(){
   if(d.tp)saveTp();
   if(d.ob)saveOb();
 }
-function save(){if(bulkOpActive){bulkDirty.entries=true;return;}DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);DB.set('cargo_cfg',cfg);pushToCloud({entries,accounts,cfg});}
-function savePaid(){if(bulkOpActive){bulkDirty.paid=true;return;}DB.set('cargo_paid_accounts',paidAccounts);DB.set('cargo_paid_entries',paidEntries);pushToCloud({paidAccounts,paidEntries});}
-function saveTp(){if(bulkOpActive){bulkDirty.tp=true;return;}DB.set('cargo_tp_rows',tpRows);DB.set('cargo_entries',entries);pushToCloud({tpRows,entries});}
-function saveOb(){if(bulkOpActive){bulkDirty.ob=true;return;}DB.set('cargo_ob_rows',obRows);DB.set('cargo_entries',entries);DB.set('cargo_accounts',accounts);pushToCloud({obRows,entries,accounts});}
+_PGET.cargo_cloud_entries_snapshot=function(){return cloudEntriesSnapshot;};
+_PGET.cargo_entries=function(){return entries;};
+_PGET.cargo_accounts=function(){return accounts;};
+_PGET.cargo_cfg=function(){return cfg;};
+_PGET.cargo_paid_accounts=function(){return paidAccounts;};
+_PGET.cargo_paid_entries=function(){return paidEntries;};
+_PGET.cargo_tp_rows=function(){return tpRows;};
+_PGET.cargo_ob_rows=function(){return obRows;};
+function save(){if(bulkOpActive){bulkDirty.entries=true;return;}persistLater(['cargo_entries','cargo_accounts','cargo_cfg']);pushToCloud({entries,accounts,cfg});}
+function savePaid(){if(bulkOpActive){bulkDirty.paid=true;return;}persistLater(['cargo_paid_accounts','cargo_paid_entries']);pushToCloud({paidAccounts,paidEntries});}
+function saveTp(){if(bulkOpActive){bulkDirty.tp=true;return;}persistLater(['cargo_tp_rows','cargo_entries']);pushToCloud({tpRows,entries});}
+function saveOb(){if(bulkOpActive){bulkDirty.ob=true;return;}persistLater(['cargo_ob_rows','cargo_entries','cargo_accounts']);pushToCloud({obRows,entries,accounts});}
 function toast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),3000);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -2094,7 +2123,7 @@ function showPage(id,el){
   document.getElementById('page-'+id).classList.add('active');
   if(el) el.classList.add('active');
   closeSidebar();
-  if(id==='dashboard')refreshDash();
+  if(id==='dashboard')refreshDashNow();
   if(id==='autoEntry'){renderCashbook();gridRestoreScroll('cashbookScrollWrap','cargo_cb_scrollpos');}
   if(id==='tpEntry'){renderTpEntries();gridRestoreScroll('tpScrollWrap','cargo_tp_scrollpos');}
   if(id==='obEntry'){renderObEntries();gridRestoreScroll('obScrollWrap','cargo_ob_scrollpos');}
@@ -2129,7 +2158,17 @@ function startAllAccountsScroll(){
     else{wrap.scrollTop+=1;}
   },80);
 }
+var _dashTimer=null;
+// Har cell commit par poora dashboard (saare accounts ki balance + HTML) dobara banta tha, chahe dashboard dikh bhi na raha ho.
+// Ab: 350ms idle ke baad ek baar, aur sirf tab jab dashboard page khula ho (showPage khud refreshDashNow chalata hai).
 function refreshDash(){
+  clearTimeout(_dashTimer);
+  _dashTimer=setTimeout(function(){
+    var pg=document.getElementById('page-dashboard');
+    if(pg && pg.classList.contains('active'))refreshDashNow();
+  },350);
+}
+function refreshDashNow(){
   // Total Jama / Total Baqaya — ab har account ka NET balance (us account ki CR minus DR)
   // nikal kar, jo account net Jama (credit) mein hai uska balance Total Jama mein aur jo net
   // Baqaya (debit) mein hai uska balance Total Baqaya mein jama karte hain. Isi tarah Summary
@@ -2795,12 +2834,13 @@ function cbUpsertField(pairId,side,field,value){
     // Date-only edits used to return here before the linked Paid-Account ledger entry got
     // mirrored, so changing a date in Cashbook silently left the old date wherever that entry
     // also appears (Paid Account ledger / statements). Mirror it here too, same as other fields.
+    let _paidDateChanged=false;
     [dr,cr].forEach(e=>{
       if(!e)return;
       const link=paidEntries.find(pe=>pe.cashbookRef===e.id);
-      if(link)link.date=e.date;
+      if(link){link.date=e.date;_paidDateChanged=true;}
     });
-    savePaid();
+    if(_paidDateChanged)savePaid();
     save();refreshDash();return;
   }
 
@@ -2841,15 +2881,17 @@ function cbUpsertField(pairId,side,field,value){
     return !isEmpty;
   });
   // keep any linked paid-account ledger entry mirrored with the latest cashbook values
+  let _paidLinkChanged=false;
   [dr,cr].forEach(e=>{
     if(!e)return;
     const stillExists=entries.includes(e);
     const link=paidEntries.find(pe=>pe.cashbookRef===e.id);
     if(!link)return;
+    _paidLinkChanged=true;
     if(!stillExists){paidEntries=paidEntries.filter(pe=>pe.cashbookRef!==e.id);}
     else{link.date=e.date;link.type=e.type;link.amount=e.amount;link.desc=e.desc;link.ref=e.ref;}
   });
-  savePaid();
+  if(_paidLinkChanged)savePaid(); // paid link na ho to paidAccounts/paidEntries cloud par dobara bhejne ki zaroorat nahi
   save();refreshDash();
 }
 
@@ -4608,8 +4650,10 @@ function renderRecycleBin(){
   if(!count||!list)return;
   // Remove entries older than 30 days
   const cutoff=Date.now()-(30*24*60*60*1000);
+  const _rbBefore=recycleBin.length;
   recycleBin=recycleBin.filter(e=>new Date(e.deletedAt).getTime()>cutoff);
-  DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});
+  // Sirf tab save/cloud push karo jab purani entries sach mein hataai gayi hon (pehle har baar page kholne par poora recycle bin dobara upload hota tha)
+  if(recycleBin.length!==_rbBefore){DB.set('cargo_recycle',recycleBin);pushToCloud({recycleBin});}
   const visibleCount=recycleBin.filter(e=>!(e.tpRowId||e.obRowId)).length;
   count.textContent=visibleCount+' deleted entries (30 din tak recover kar sakte hain)';
   if(!recycleBin.length){
@@ -5321,8 +5365,11 @@ function doPrint(){
 // BACKUP
 function exportData(){
   const d={entries,accounts,paidAccounts,paidEntries,tpRows,obRows,cfg,recycleBin,exportedAt:new Date().toISOString()};
-  const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='farman-cargo-backup-'+today()+'.json';a.click();
+  const blob=new Blob([JSON.stringify(d)],{type:'application/json'}); // compact JSON: pretty-print (null,2) file bhari aur slow banata tha
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='farman-cargo-backup-'+today()+'.json';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},4000);
   toast('Backup file download ho rahi hai! 💾','success');
 }
 function importData(ev){
