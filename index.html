@@ -2579,9 +2579,58 @@ function openAccDetail(name){
   renderAccDetail(name);
   closeSidebar();
 }
+
+// ===== Ledger ordering for Party & Paid Entry (TP) generated entries =====
+// Ledgers sort by date only, so same-date entries used to follow creation order in entries[] —
+// not the order the rows appear on the Party & Paid Entry page. This restores that order.
+function tpRowOrderMap(){
+  const rows=tpRows.slice().sort((a,b)=>{
+    if(!a.date&&!b.date)return 0;
+    if(!a.date)return 1;
+    if(!b.date)return -1;
+    return new Date(a.date)-new Date(b.date);
+  });
+  const m={};
+  rows.forEach((r,i)=>{m[r.id]=i;});
+  return m;
+}
+// list: ledger items (entries[] items, or paidEntries[] items with cashbookRef).
+// tpFirst=true (Paid ledger): TP entries go to the top of their date.
+// tpFirst=false (Accounts/Profit ledger): TP entries keep their slots but follow the TP page order.
+function sortLedgerList(list,tpFirst){
+  const om=tpRowOrderMap();
+  const entById={};
+  entries.forEach(e=>{entById[e.id]=e;});
+  const tpIdx=x=>{
+    const src=x.tpRowId?x:(x.cashbookRef?entById[x.cashbookRef]:null);
+    if(!src||!src.tpRowId)return -1;
+    const i=om[src.tpRowId];
+    return i===undefined?-1:i;
+  };
+  const dkey=x=>x.date||'9999-99-99';
+  const base=list.map((x,i)=>({x,i,d:dkey(x),t:tpIdx(x)}));
+  base.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:a.i-b.i);
+  const out=[];
+  let k=0;
+  while(k<base.length){
+    let j=k;
+    while(j<base.length&&base[j].d===base[k].d)j++;
+    const grp=base.slice(k,j);
+    const tps=grp.filter(g=>g.t>=0).sort((a,b)=>a.t-b.t||a.i-b.i);
+    if(tpFirst){
+      grp.filter(g=>g.t<0).forEach(g=>tps.push(g));
+      tps.forEach(g=>out.push(g.x));
+    }else{
+      let ti=0;
+      grp.forEach(g=>{out.push(g.t>=0?tps[ti++].x:g.x);});
+    }
+    k=j;
+  }
+  return out;
+}
 function renderAccDetail(name){
   const acc=accounts.find(a=>a.name===name)||{name,phone:'',address:''};
-  const accEntries=entries.filter(e=>e.name===name).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const accEntries=sortLedgerList(entries.filter(e=>e.name===name),false);
   const totalCR=accEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const totalDR=accEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   const bal=totalCR-totalDR;
@@ -2653,7 +2702,7 @@ function saveCellEdit(el,id){
 function printAccDetail(){
   if(!currentAccDetailId)return;
   const name=currentAccDetailId;
-  const accEntries=entries.filter(e=>e.name===name).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const accEntries=sortLedgerList(entries.filter(e=>e.name===name),false);
   const tcr=accEntries.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const tdr=accEntries.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   let running=0;
@@ -5778,7 +5827,7 @@ function openPaidAccDetail(id){
 }
 function renderPaidAccDetail(id){
   const a=paidAccounts.find(x=>x.id===id);if(!a)return;
-  const ae=paidEntries.filter(e=>e.paidAccId===id).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const ae=sortLedgerList(paidEntries.filter(e=>e.paidAccId===id),true);
   const cr=ae.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const dr=ae.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   const bal=cr-dr;
@@ -5871,7 +5920,7 @@ function deletePaidEntry(id){
 function printPaidDetail(){
   if(!currentPaidAccId)return;
   const a=paidAccounts.find(x=>x.id===currentPaidAccId);if(!a)return;
-  const ae=paidEntries.filter(e=>e.paidAccId===currentPaidAccId).sort((x,y)=>new Date(x.date)-new Date(y.date));
+  const ae=sortLedgerList(paidEntries.filter(e=>e.paidAccId===currentPaidAccId),true);
   const tcr=ae.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
   const tdr=ae.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
   let running=0;
