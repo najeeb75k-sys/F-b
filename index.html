@@ -1609,7 +1609,11 @@ function attachCloudSync(){
       if(!keep('obRows') && Array.isArray(data.obRows))obRows=data.obRows;
       if(!keep('summaryTopAccounts') && data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
       // ONE-TIME MIGRATION: older versions kept the whole Cashbook ledger as one big array field here.
-      if(Array.isArray(data.entries) && data.entries.length>0 && !cfg._entriesSubcolMigrated){
+      // SAFE: sirf tab chale jab na local cfg mein aur na CLOUD cfg mein 'migrated' flag ho. Pehle yeh sirf local flag dekhta tha,
+      // to purani/offline device par 2 mahine purana `entries` array naye data ko overwrite kar deta tha.
+      const cloudMigrated=!!(data.cfg && data.cfg._entriesSubcolMigrated);
+      if(cloudMigrated && !cfg._entriesSubcolMigrated){cfg._entriesSubcolMigrated=true;DB.set('cargo_cfg',cfg);}
+      if(Array.isArray(data.entries) && data.entries.length>0 && !cfg._entriesSubcolMigrated && !cloudMigrated){
         entries=data.entries;
         DB.set('cargo_entries',entries);
         cfg._entriesSubcolMigrated=true;
@@ -1630,6 +1634,10 @@ function attachCloudSync(){
       if(fbLeftoverKeys.length){
         const f={};fbLeftoverKeys.forEach(k=>{f[k]=true;});fbLeftoverKeys=[];
         pushToCloud(f);
+      }
+      // Purana `entries` array cloud mein pada reh jata tha (merge:true kabhi delete nahi karta) — server confirm hone par hata do.
+      if(cloudMigrated && Array.isArray(data.entries) && !snap.metadata.fromCache && !snap.metadata.hasPendingWrites){
+        docRef.update({entries:firebase.firestore.FieldValue.delete()}).catch(()=>{});
       }
       reconcileMissingAccounts();
       refreshUIAfterCloudChange();
@@ -6014,9 +6022,20 @@ document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeFab(); });
 // Service Worker registration (real file, proper offline caching)
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg=>{ console.log('SW registered', reg.scope); })
+    navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'})
+      .then(reg=>{
+        console.log('SW registered', reg.scope);
+        reg.update().catch(()=>{});                       // har launch par naye version ki check
+        document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reg.update().catch(()=>{}); });
+      })
       .catch(e=>console.log('SW registration failed:', e));
+    // Naya SW control sambhale to page ek baar reload (purana code na chale)
+    let _swReloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(_swReloaded)return; _swReloaded=true;
+      if(typeof persistFlushNow==='function')persistFlushNow();
+      location.reload();
+    });
   });
 }
 

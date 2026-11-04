@@ -1,22 +1,25 @@
-const CACHE = 'fb-cargo-v6';
+const CACHE = 'fb-cargo-v7';
 const FILES_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-72.png',
-  './icon-96.png',
-  './icon-128.png',
-  './icon-144.png',
-  './icon-152.png',
-  './icon-192.png',
-  './icon-384.png',
-  './icon-512.png'
+  './', './index.html', './manifest.json',
+  './icon-72.png','./icon-96.png','./icon-128.png','./icon-144.png',
+  './icon-152.png','./icon-192.png','./icon-384.png','./icon-512.png'
+];
+// Firebase libraries — offline par bhi chahiye (pehle cache nahi hoti thin, aur fail hone par index.html wapas aata tha)
+const FIREBASE_LIBS = [
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'
 ];
 
 self.addEventListener('install', (e) => {
+  self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(FILES_TO_CACHE))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) =>
+      Promise.all([
+        cache.addAll(FILES_TO_CACHE),
+        ...FIREBASE_LIBS.map((u) => cache.add(u).catch(() => {}))
+      ])
+    )
   );
 });
 
@@ -28,48 +31,46 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// NETWORK-FIRST for the app shell (index.html / navigations) — always fetch the freshest
-// version from the server first, and only fall back to the cached copy if offline.
-// This is what fixes "I updated index.html but the app still shows the old version":
-// previously index.html was cache-first, so old cached copies never got replaced unless
-// the CACHE version above was manually bumped. Now it self-updates every time there's
-// a network connection, with no manual step needed.
 function isAppShellRequest(request) {
   if (request.mode === 'navigate') return true;
   const url = new URL(request.url);
-  return url.pathname.endsWith('/index.html') || url.pathname.endsWith('/');
+  return url.origin === location.origin && (url.pathname.endsWith('/index.html') || url.pathname.endsWith('/'));
 }
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
 
+  // Firebase libs: cache-first
+  if (FIREBASE_LIBS.includes(url.href)) {
+    e.respondWith(
+      caches.match(e.request).then((c) => c || fetch(e.request).then((res) => {
+        const copy = res.clone(); caches.open(CACHE).then((cc) => cc.put(e.request, copy)); return res;
+      }))
+    );
+    return;
+  }
+  // Baqi sab cross-origin (Firestore, Google Auth ...) ko touch nahi karna
+  if (url.origin !== location.origin) return;
+
+  // App shell: NETWORK-FIRST (HTTP cache bypass, taake GitHub ka 10-min cache purana na de)
   if (isAppShellRequest(e.request)) {
     e.respondWith(
-      fetch(e.request)
+      fetch(e.request, { cache: 'no-store' })
         .then((res) => {
-          caches.open(CACHE).then((cache) => cache.put(e.request, res.clone()));
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
           return res;
         })
-        .catch(() =>
-          caches.match(e.request).then((cached) => cached || caches.match('./index.html'))
-        )
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }
 
-  // CACHE-FIRST for static assets (icons, manifest) — these rarely change, so it's fine
-  // to serve them from cache instantly and only fetch when not already cached.
+  // Static assets: cache-first (galat fallback index.html nahi)
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request)
-        .then((res) => {
-          return caches.open(CACHE).then((cache) => {
-            cache.put(e.request, res.clone());
-            return res;
-          });
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+    caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
+      const copy = res.clone(); caches.open(CACHE).then((cache) => cache.put(e.request, copy)); return res;
+    }))
   );
 });
