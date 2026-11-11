@@ -2186,9 +2186,9 @@ function showPage(id,el){
   if(el) el.classList.add('active');
   closeSidebar();
   if(id==='dashboard')refreshDashNow();
-  if(id==='autoEntry'){if(window.__rv.autoEntry!==window.__dv)renderCashbook();gridRestoreScroll('cashbookScrollWrap','cargo_cb_scrollpos');}
-  if(id==='tpEntry'){if(window.__rv.tpEntry!==window.__dv)renderTpEntries();gridRestoreScroll('tpScrollWrap','cargo_tp_scrollpos');}
-  if(id==='obEntry'){if(window.__rv.obEntry!==window.__dv)renderObEntries();gridRestoreScroll('obScrollWrap','cargo_ob_scrollpos');}
+  if(id==='autoEntry'){v2Defer('autoEntry',function(){if(window.__rv.autoEntry!==window.__dv)renderCashbook();gridRestoreScroll('cashbookScrollWrap','cargo_cb_scrollpos');});}
+  if(id==='tpEntry'){v2Defer('tpEntry',function(){if(window.__rv.tpEntry!==window.__dv)renderTpEntries();gridRestoreScroll('tpScrollWrap','cargo_tp_scrollpos');});}
+  if(id==='obEntry'){v2Defer('obEntry',function(){if(window.__rv.obEntry!==window.__dv)renderObEntries();gridRestoreScroll('obScrollWrap','cargo_ob_scrollpos');});}
   if(id==='accounts')renderAccounts();
   if(id==='summary')renderSummary();
   if(id==='backup'){renderRecycleBin();renderLastLogin();}
@@ -2799,7 +2799,7 @@ const CB_MIN_ROWS=15;
 // UP toward the top of the grid (where the older, hidden rows live), bindInfiniteScrollUp below
 // automatically loads more in chunks — so every entry stays reachable by scrolling, it's just not
 // all sitting in the DOM at once on page-open.
-const CB_DEFAULT_VISIBLE=60;
+const CB_DEFAULT_VISIBLE=40;
 let cbVisibleLimit=CB_DEFAULT_VISIBLE;
 let cbHiddenOlderCount=0;
 // Generic "load more when scrolled near the top" binder — used by both Cashbook and Party & Paid
@@ -2900,7 +2900,7 @@ function cbAddBulkRows(){
   const n=parseInt(inp.value,10);
   if(!n||n<1){toast('Pehle rows ki tadaad darain!','error');return;}
   const realCount=cbRowsFromEntries().length;
-  cbDesiredBlankCount=Math.max(CB_MIN_ROWS,realCount+n);
+  cbDesiredBlankCount=Math.max(CB_MIN_ROWS,realCount+n);window.__bulkCap=n;
   inp.value='';
   renderCashbook();
   toast(n+' nayi rows add ho gayin! ✅','success');
@@ -2911,7 +2911,7 @@ function cbEnsureMinRows(rows){
   const realCount=rows.length;
   if(cbDesiredBlankCount<CB_MIN_ROWS)cbDesiredBlankCount=CB_MIN_ROWS;
   cbSaveBlankCounts();
-  const blanksNeeded=Math.max(0,cbDesiredBlankCount-realCount);
+  const blanksNeeded=Math.min(Math.max(0,cbDesiredBlankCount-realCount),Math.max(30,window.__bulkCap||0));
   // A pool id that has just turned into a real row (got its first entry) must be dropped from the
   // pool — otherwise it gets handed out again to the next blank row, and that next row's edits would
   // land on the now-real row's pairId instead of creating its own (the bug: row 2 overwriting row 1).
@@ -3815,7 +3815,7 @@ function tpAddBulkRows(){
   const n=parseInt(inp.value,10);
   if(!n||n<1){toast('Pehle rows ki tadaad darain!','error');return;}
   const realCount=tpRows.length;
-  tpDesiredBlankCount=Math.max(TP_MIN_ROWS,realCount+n);
+  tpDesiredBlankCount=Math.max(TP_MIN_ROWS,realCount+n);window.__bulkCap=n;
   inp.value='';
   renderTpEntries();
   toast(n+' nayi rows add ho gayin! ✅','success');
@@ -3824,7 +3824,7 @@ function tpEnsureMinRows(rows){
   const realCount=rows.length;
   if(tpDesiredBlankCount<TP_MIN_ROWS)tpDesiredBlankCount=TP_MIN_ROWS;
   tpSaveBlankCounts();
-  const blanksNeeded=Math.max(0,tpDesiredBlankCount-realCount);
+  const blanksNeeded=Math.min(Math.max(0,tpDesiredBlankCount-realCount),Math.max(30,window.__bulkCap||0));
   const realIds=new Set(rows.map(r=>r.id));
   tpBlankPool=tpBlankPool.filter(id=>{
     if(realIds.has(id)){delete tpPendingDates[id];return false;}
@@ -4426,7 +4426,7 @@ function obEnsureMinRows(rows){
   const realCount=rows.length;
   if(obDesiredBlankCount<OB_MIN_ROWS)obDesiredBlankCount=OB_MIN_ROWS;
   obSaveBlankCounts();
-  const blanksNeeded=Math.max(0,obDesiredBlankCount-realCount);
+  const blanksNeeded=Math.min(Math.max(0,obDesiredBlankCount-realCount),Math.max(30,window.__bulkCap||0));
   const realIds=new Set(rows.map(r=>r.id));
   obBlankPool=obBlankPool.filter(id=>{
     if(realIds.has(id)){delete obPendingDates[id];return false;}
@@ -4449,7 +4449,7 @@ function obAddBulkRows(){
   const n=parseInt(inp.value,10);
   if(!n||n<1){toast('Pehle rows ki tadaad darain!','error');return;}
   const realCount=obRows.length;
-  obDesiredBlankCount=Math.max(OB_MIN_ROWS,realCount+n);
+  obDesiredBlankCount=Math.max(OB_MIN_ROWS,realCount+n);window.__bulkCap=n;
   inp.value='';
   renderObEntries();
   toast(n+' nayi rows add ho gayin! ✅','success');
@@ -6342,6 +6342,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script>
 // ===== v2 helpers =====
+function v2Defer(id,fn){
+  var tb=document.getElementById(id==='autoEntry'?'cashbookBody':id==='tpEntry'?'tpEntryBody':'obEntryBody');
+  if(tb&&!tb.firstChild)tb.innerHTML='<tr><td colspan="15" style="padding:22px;text-align:center;color:#64748b;">Load ho raha hai…</td></tr>';
+  requestAnimationFrame(function(){setTimeout(function(){
+    var pg=document.getElementById('page-'+id);
+    if(pg&&pg.classList.contains('active')){var t=performance.now();fn();console.info('[grid]',id,Math.round(performance.now()-t)+'ms');}
+  },0);});
+}
 var _pIdxCache=null;
 function _pIdx(){
   var pa=paidAccounts,sig=pa.length+'|'+(window.__dv||0);
