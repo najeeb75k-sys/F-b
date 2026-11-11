@@ -470,6 +470,18 @@
 #cashbookScrollWrap>table,#tpScrollWrap>table{width:100%;}
 .main-content:has(#page-autoEntry.active,#page-tpEntry.active){padding:14px 16px;}
 </style>
+<style>
+#cashbookScrollWrap,#tpScrollWrap{max-height:calc(100vh - 290px);min-height:300px;}
+#page-autoEntry>.card,#page-tpEntry>.card{padding:14px 16px;margin-bottom:8px;}
+</style>
+<style>
+/* v2.2: extra width goes to the text columns, not the delete-button column */
+#cashbookScrollWrap>table{width:100%;min-width:1200px!important;}
+#cashbookScrollWrap col:nth-child(3),#cashbookScrollWrap col:nth-child(9){width:140px!important;}
+#cashbookScrollWrap col:nth-child(8){width:auto!important;}
+#tpScrollWrap>table{width:100%;min-width:1190px!important;}
+#tpScrollWrap col:nth-child(3),#tpScrollWrap col:nth-child(6),#tpScrollWrap col:nth-child(11),#tpScrollWrap col:nth-child(13){width:auto!important;}
+</style>
 </head>
 <body>
 
@@ -796,7 +808,7 @@
         <div class="card">
           <div class="card-header"><span class="card-title" data-i18n="accountsList">👥 Accounts List</span><div style="display:flex;gap:8px;" class="no-print"><button class="btn btn-primary btn-sm" onclick="printAccountsList()" data-i18n="print">🖨️ Print</button><button class="btn btn-gold btn-sm" onclick="openAddAcc()" data-i18n="addAccount">➕ Add Account</button></div></div>
           <div class="search-bar no-print">
-            <div class="srch-wrap"><span class="si">🔍</span><input type="text" id="accSearch" placeholder="Search accounts..." oninput="filterAccounts()"></div>
+            <div class="srch-wrap"><span class="si">🔍</span><input type="text" id="accSearch" placeholder="Search accounts..." oninput="filterAccounts()"></div><label class="no-print" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);cursor:pointer;margin-left:12px;white-space:nowrap;"><input type="checkbox" id="accHideEmpty" checked onchange="v2HideEmptyChanged('accHideEmpty',filterAccounts)">Khali accounts chhupayein</label><span id="accHiddenInfo" class="no-print" style="font-size:12px;color:var(--text-light);margin-left:8px;"></span>
           </div>
           <div class="tbl-wrap">
             <table><thead><tr><th>#</th><th data-i18n="accountName">Account Name</th><th class="hide-mobile" data-i18n="phone">Phone</th><th class="hide-mobile" data-i18n="address">Address</th><th data-i18n="crTotal">CR Total</th><th data-i18n="drTotal">DR Total</th><th data-i18n="balance">Balance</th><th class="no-print" data-i18n="action">Action</th></tr></thead>
@@ -871,7 +883,7 @@
             </div>
           </div>
           <div class="search-bar no-print">
-            <div class="srch-wrap"><span class="si">🔍</span><input type="text" id="paidSearch" placeholder="Account name ya Paid No se search..." oninput="renderPaidAccounts()"></div>
+            <div class="srch-wrap"><span class="si">🔍</span><input type="text" id="paidSearch" placeholder="Account name ya Paid No se search..." oninput="renderPaidAccounts()"></div><label class="no-print" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);cursor:pointer;margin-left:12px;white-space:nowrap;"><input type="checkbox" id="paidHideEmpty" checked onchange="v2HideEmptyChanged('paidHideEmpty',renderPaidAccounts)">Khali accounts chhupayein</label><span id="paidHiddenInfo" class="no-print" style="font-size:12px;color:var(--text-light);margin-left:8px;"></span>
           </div>
           <div class="tbl-wrap">
             <table><thead><tr>
@@ -1649,7 +1661,7 @@ function attachCloudSync(){
       const data=snap.data();
       const keep=fbFieldIsUnsynced; // local edit not confirmed yet -> do NOT overwrite it with older cloud data
       let needMigrationPush=false;
-      fbApplyingRemote=true;
+      fbApplyingRemote=true;window.__lastSent={};
       if(!keep('accounts') && Array.isArray(data.accounts))accounts=data.accounts;
       if(!keep('cfg') && data.cfg)cfg={...cfg,...data.cfg};
       if(!keep('recycleBin') && Array.isArray(data.recycleBin))recycleBin=data.recycleBin;
@@ -1713,7 +1725,7 @@ function attachEntriesSync(){
     // NOTE: we no longer drop the whole snapshot while writes are pending (on a slow net that is
     // "always", and other-device changes in that window were lost). Instead each change is checked.
     let changed=false;
-    fbApplyingRemote=true;
+    fbApplyingRemote=true;window.__lastSent={};
     const idxMap=new Map(entries.map((e,i)=>[e.id,i]));
     snap.docChanges().forEach(chg=>{
       if(chg.doc.metadata.hasPendingWrites)return; // echo of OUR OWN not-yet-confirmed write — local copy is already right
@@ -1768,7 +1780,7 @@ function pushToCloud(fields){
     fbEntriesDirty=true;
     delete fields.entries;
     clearTimeout(fbEntriesPushTimer);
-    fbEntriesPushTimer=setTimeout(syncEntriesIncremental,1500);
+    fbEntriesPushTimer=setTimeout(syncEntriesIncremental,250);
   }
   const names=Object.keys(fields).filter(k=>fbGetField(k)!==undefined);
   if(names.length===0)return;
@@ -1777,7 +1789,7 @@ function pushToCloud(fields){
   names.forEach(k=>{fbPendingFields[k]=true;});
   clearTimeout(fbPushTimer);
   setSyncBadge('syncing');
-  fbPushTimer=setTimeout(fbSendPending,400); // debounce so fast typing doesn't spam Firestore
+  fbPushTimer=setTimeout(fbSendPending,250); // debounce so fast typing doesn't spam Firestore
 }
 function fbSendPending(){
   if(!fbUser||!fbDb||!fbPendingFields)return;
@@ -1785,9 +1797,11 @@ function fbSendPending(){
   fbPendingFields=null;
   const payload={updatedAt:new Date().toISOString()};
   try{
-    names.forEach(k=>{const v=fbGetField(k);if(v!==undefined)payload[k]=JSON.parse(JSON.stringify(v));});
+    window.__lastSent=window.__lastSent||{};
+    names.forEach(k=>{const v=fbGetField(k);if(v===undefined)return;const j=JSON.stringify(v);if(window.__lastSent[k]===j)return;window.__lastSent[k]=j;payload[k]=JSON.parse(j);});
   }catch(e){console.error('payload build failed',e);}
   const sentAt=Date.now();
+  if(Object.keys(payload).length===1){fbClearUnsynced(names,sentAt);if(fbIsFullySynced())setSyncBadge('connected');return;}
   fbDocBusy++;
   fbDb.collection('cargo_data').doc(fbUser.uid).set(payload,{merge:true}).then(()=>{
     fbDocBusy--;
@@ -1797,6 +1811,7 @@ function fbSendPending(){
   }).catch(err=>{
     fbDocBusy--;
     // keep the fields queued so they are retried instead of silently lost
+    window.__lastSent={};
     fbPendingFields=fbPendingFields||{};
     names.forEach(k=>{fbPendingFields[k]=true;});
     fbReportSyncError(err);
@@ -1815,7 +1830,7 @@ function syncEntriesIncremental(){
   var run=++_seRun,list=entries.slice(),currentIds=new Set(),toWrite=[],i=0;
   (function step(){
     if(run!==_seRun)return;
-    var end=Math.min(i+300,list.length);
+    var end=Math.min(i+1500,list.length);
     for(;i<end;i++){var e=list[i];if(!e||!e.id)continue;currentIds.add(e.id);var json=JSON.stringify(e);if(cloudEntriesSnapshot[e.id]!==json&&fbEntriesInflight[e.id]!==json)toWrite.push({e:e,json:json});}
     if(i<list.length){setTimeout(step,0);return;}
     _syncEntriesCore(currentIds,toWrite);
@@ -2541,9 +2556,16 @@ function deleteAcc(id){
   toast('Account Recycle Bin mein gaya! ↩️ Wapas la sakte hain.','');
 }
 function renderAccounts(data){
-  const list=data||accounts;
+  // the search box keeps its text when you leave the page, so always honour it (also when called with no argument)
+  const q0=(document.getElementById('accSearch')?.value||'').trim().toLowerCase();
+  let list=data||(q0?accounts.filter(a=>a.name.toLowerCase().includes(q0)):accounts);
+  const _accTot=new Map();
+  entries.forEach(e=>{let t=_accTot.get(e.name);if(!t){t={cr:0,dr:0};_accTot.set(e.name,t);}if(e.type==='CR')t.cr+=e.amount;else if(e.type==='DR')t.dr+=e.amount;});
+  let hidden=0;
+  if(!q0&&v2HideEmpty('accHideEmpty')){const b=list.length;list=list.filter(a=>{const t=_accTot.get(a.name);return t&&(t.cr||t.dr);});hidden=b-list.length;}
+  const _info=document.getElementById('accHiddenInfo');if(_info)_info.textContent=hidden?(hidden+' khali account chhupe hain'):'';
   const tbody=document.getElementById('accountsBody');
-  if(!list.length){tbody.innerHTML='<tr><td colspan="8" style="padding:30px;text-align:center;color:#94a3b8;">No accounts added</td></tr>';return;}
+  if(!list.length){tbody.innerHTML='<tr><td colspan="8" style="padding:30px;text-align:center;color:#94a3b8;">'+(hidden?'Sab accounts khali hain — upar se filter band karein':(q0?'Koi nataija nahi':'No accounts added'))+'</td></tr>';return;}
   // Group into PA- / Party- / V- sections (in that order). Within each section accounts stay in
   // their existing (insertion) order, so a newly-added account naturally lands as that section's
   // last row — right before its section's total row. Anything not matching a known prefix falls
@@ -2564,8 +2586,8 @@ function renderAccounts(data){
   let rowNum=0;
   const acctRow=(a)=>{
     rowNum++;
-    const cr=entries.filter(e=>e.name===a.name&&e.type==='CR').reduce((s,e)=>s+e.amount,0);
-    const dr=entries.filter(e=>e.name===a.name&&e.type==='DR').reduce((s,e)=>s+e.amount,0);
+    const _t=_accTot.get(a.name)||{cr:0,dr:0};const cr=_t.cr;
+    const dr=_t.dr;
     const bal=cr-dr;
     return {cr,dr,html:`<tr>
       <td style="color:var(--text-light);">${rowNum}</td>
@@ -5574,14 +5596,18 @@ function renderPaidAccounts(){
   if(!tbody)return;
   let list=paidAccounts;
   if(q) list=list.filter(a=>a.name.toLowerCase().includes(q)||String(a.paidNo||'').toLowerCase().includes(q));
+  const _pt=new Map();
+  paidEntries.forEach(e=>{let t=_pt.get(e.paidAccId);if(!t){t={cr:0,dr:0};_pt.set(e.paidAccId,t);}if(e.type==='CR')t.cr+=e.amount;else if(e.type==='DR')t.dr+=e.amount;});
+  let hidden=0;
+  if(!q&&v2HideEmpty('paidHideEmpty')){const b=list.length;list=list.filter(a=>{const t=_pt.get(a.id);return t&&(t.cr||t.dr);});hidden=b-list.length;}
+  const _pinfo=document.getElementById('paidHiddenInfo');if(_pinfo)_pinfo.textContent=hidden?(hidden+' khali account chhupe hain'):'';
   if(!list.length){
-    tbody.innerHTML='<tr><td colspan="8" style="padding:30px;text-align:center;color:#94a3b8;">'+(q?'Koi nataija nahi':'Koi paid account nahi — Add karein')+'</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="padding:30px;text-align:center;color:#94a3b8;">'+(q?'Koi nataija nahi':(hidden?'Sab paid accounts khali hain — upar se filter band karein':'Koi paid account nahi — Add karein'))+'</td></tr>';
     return;
   }
   tbody.innerHTML=list.map((a,i)=>{
-    const ae=paidEntries.filter(e=>e.paidAccId===a.id);
-    const cr=ae.filter(e=>e.type==='CR').reduce((s,e)=>s+e.amount,0);
-    const dr=ae.filter(e=>e.type==='DR').reduce((s,e)=>s+e.amount,0);
+    const _t=_pt.get(a.id)||{cr:0,dr:0};const cr=_t.cr;
+    const dr=_t.dr;
     const bal=cr-dr;
     const balColor=bal>=0?'#15803d':'#dc2626';
     return `<tr>
@@ -6342,6 +6368,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script>
 // ===== v2 helpers =====
+function v2HideEmpty(id){var el=document.getElementById(id);return el?el.checked:DB.get('v2_'+id,true);}
+function v2HideEmptyChanged(id,fn){var el=document.getElementById(id);DB.set('v2_'+id,!!(el&&el.checked));fn();}
+window.addEventListener('load',function(){['accHideEmpty','paidHideEmpty'].forEach(function(id){var el=document.getElementById(id);if(el)el.checked=DB.get('v2_'+id,true);});});
 function v2Defer(id,fn){
   var tb=document.getElementById(id==='autoEntry'?'cashbookBody':id==='tpEntry'?'tpEntryBody':'obEntryBody');
   if(tb&&!tb.firstChild)tb.innerHTML='<tr><td colspan="15" style="padding:22px;text-align:center;color:#64748b;">Load ho raha hai…</td></tr>';
