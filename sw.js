@@ -1,4 +1,5 @@
-const CACHE = 'fb-cargo-v7';
+const CACHE = 'fb-cargo-v8';
+const SHELL_NET_TIMEOUT = 3500; // slow net par itna intezar, phir saved app foran khul jaye
 const FILES_TO_CACHE = [
   './', './index.html', './manifest.json',
   './icon-72.png','./icon-96.png','./icon-128.png','./icon-144.png',
@@ -55,14 +56,20 @@ self.addEventListener('fetch', (e) => {
 
   // App shell: NETWORK-FIRST (HTTP cache bypass, taake GitHub ka 10-min cache purana na de)
   if (isAppShellRequest(e.request)) {
+    const net = fetch(e.request, { cache: 'no-store' }).then((res) => {
+      // sirf theek (200) jawab cache mein jaye — error page kabhi cache na ho
+      if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((cache) => cache.put('./index.html', copy)); }
+      return res;
+    });
+    e.waitUntil(net.catch(() => {})); // timeout ke baad bhi download poora ho kar cache update ho jaye
     e.respondWith(
-      fetch(e.request, { cache: 'no-store' })
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
-          return res;
-        })
-        .catch(() => caches.match('./index.html'))
+      caches.match('./index.html').then((cached) => {
+        if (!cached) return net;
+        return Promise.race([
+          net.then((res) => (res && res.ok ? res : cached)).catch(() => cached),
+          new Promise((resolve) => setTimeout(() => resolve(cached), SHELL_NET_TIMEOUT))
+        ]);
+      })
     );
     return;
   }

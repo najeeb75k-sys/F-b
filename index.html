@@ -1580,11 +1580,23 @@ if(FIREBASE_ENABLED){
     fbApp=firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth=firebase.auth();
     fbDb=firebase.firestore();
+    // Mobile networks/proxies often stall Firestore's default streaming connection for many seconds, so
+    // the server's fresh data arrives very late (phone keeps showing old cache). Auto-detect falls back
+    // to long-polling only when streaming fails — normal networks are unaffected.
+    try{fbDb.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){console.warn('Firestore settings skipped',e);}
     fbDb.enablePersistence({synchronizeTabs:true}).catch(()=>{}); // offline cache, ok if it fails (e.g. private window)
   }catch(e){console.error('Firebase init failed',e);}
 }
 
+let fbServerMainOk=false, fbServerEntriesOk=false; // true once each listener got a SERVER snapshot (not cache)
 function setSyncBadge(state){
+  if(state==='connected' && fbUser && !(fbServerMainOk&&fbServerEntriesOk)){
+    const el0=document.getElementById('syncStatusBadge'),bk0=document.getElementById('gdriveStatus');
+    const wait=n=>{if(!n)return;n.className='gdrive-status connected';n.textContent=navigator.onLine===false?'🔴 Offline — phone ka saved data':'🔄 Cloud se taaza data aa raha hai…';};
+    if(el0){el0.style.display='inline-flex';wait(el0);}
+    wait(bk0);
+    return;
+  }
   // state: 'connected' | 'syncing' | 'offline' | 'off'
   const el=document.getElementById('syncStatusBadge');
   const bk=document.getElementById('gdriveStatus');
@@ -1723,7 +1735,9 @@ function attachCloudSync(){
   if(!fbUser||!fbDb)return;
   const docRef=fbDb.collection('cargo_data').doc(fbUser.uid);
   if(fbUnsub)fbUnsub(); // detach any previous listener
+  fbServerMainOk=false;fbServerEntriesOk=false;
   fbUnsub=docRef.onSnapshot({includeMetadataChanges:true}, snap=>{
+    if(!snap.metadata.fromCache)fbServerMainOk=true;
     if(snap.exists){
       const data=snap.data();
       const keep=fbFieldIsUnsynced; // local edit not confirmed yet -> do NOT overwrite it with older cloud data
@@ -1789,6 +1803,7 @@ function attachEntriesSync(){
   if(fbEntriesUnsub)fbEntriesUnsub();
   const col=fbDb.collection('cargo_data').doc(fbUser.uid).collection('entries');
   fbEntriesUnsub=col.onSnapshot({includeMetadataChanges:true}, snap=>{
+    if(!snap.metadata.fromCache)fbServerEntriesOk=true;
     // NOTE: we no longer drop the whole snapshot while writes are pending (on a slow net that is
     // "always", and other-device changes in that window were lost). Instead each change is checked.
     let changed=false;
@@ -6277,7 +6292,9 @@ if('serviceWorker' in navigator){
       .catch(e=>console.log('SW registration failed:', e));
     // Naya SW control sambhale to page ek baar reload (purana code na chale)
     let _swReloaded=false;
+    const _hadSwController=!!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(!_hadSwController)return; // first-ever install: nothing stale to replace, so no extra reload
       if(_swReloaded)return; _swReloaded=true;
       if(typeof persistFlushNow==='function')persistFlushNow();
       location.reload();
