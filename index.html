@@ -423,12 +423,6 @@
 <link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icon-192.png">
 <style>
-/* ===== Pending Paid No: P- account ki row jab tak Paid No na bhara jaye halka peela ===== */
-#cashbookBody tr.cb-pending td,#cashbookBody tr.cb-pending td.cbcell,#cashbookBody tr.cb-pending td.cbcell.cb-debit,#cashbookBody tr.cb-pending td.cbcell.cb-credit{background-color:#FFF3C4 !important;}
-#cashbookBody tr.cb-pending td:first-child{box-shadow:inset 3px 0 0 #E39B1A;}
-#cashbookBody tr.cb-flash td{background-color:#FFD76A !important;transition:background-color .4s;}
-.pp-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:#E39B1A;color:#fff;font-size:12px;font-weight:700;margin-left:8px;}
-.pp-num{display:inline-block;min-width:34px;text-align:center;padding:2px 8px;border-radius:6px;background:#FFE8A3;color:#7A4B00;font-weight:700;font-size:12px;margin-right:8px;}
 /* ===== v2: compact sidebar (laptop), roomier dashboard cards, instant grid pages ===== */
 #page-autoEntry.active,#page-tpEntry.active,#page-obEntry.active{animation:none;}
 .nav-item .ni{display:flex;align-items:center;justify-content:center;}
@@ -655,15 +649,6 @@ body{background:linear-gradient(160deg,#EAF2FF 0%,#F3EEFF 55%,#FFF1E8 100%);}
             Yeh entries ya toh sirf Baqaya/Jama side par hain (dusra side khali), ya Party &amp; Paid Entry row ka Baqaya uske Jama+Profit+TP se match nahi karta. Isi wajah se Total Jama aur Total Baqaya barabar nahi hain. Neeche se ja kar khali/galat side khud bharein.
           </div>
           <div id="balanceMismatchList"></div>
-        </div>
-        <div id="pendingPaidCard" class="card" style="display:none;border:1px solid #F2D675;background:#FFFBEA;">
-          <div class="card-header">
-            <span class="card-title" style="color:#8A5A00;">⏳ Pending — Paid No Baqi Hai<span class="pp-badge" id="pendingPaidCount">0</span></span>
-          </div>
-          <div style="font-size:12px;color:var(--text-light);margin-bottom:10px;">
-            In Cashbook entries mein P- (Paid) account hai lekin abhi tak <b>Paid No</b> nahi bhara gaya. Entry par click karein — seedha Cashbook ki us row par pahunch jayenge. Paid No bharte hi yeh yahan se khud hat jayegi.
-          </div>
-          <div id="pendingPaidList" style="max-height:300px;overflow-y:auto;"></div>
         </div>
         <div class="card"><div class="card-header"><span class="card-title">Jama vs Baqaya (aakhri 6 mahine)</span><span class="dash-legend"><i class="cr"></i>Jama <i class="dr"></i>Baqaya</span></div><div id="dashChart" class="dash-chart"></div></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
@@ -1554,7 +1539,6 @@ if(FIREBASE_ENABLED){
     fbApp=firebase.initializeApp(FIREBASE_CONFIG);
     fbAuth=firebase.auth();
     fbDb=firebase.firestore();
-    try{fbDb.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
     fbDb.enablePersistence({synchronizeTabs:true}).catch(()=>{}); // offline cache, ok if it fails (e.g. private window)
   }catch(e){console.error('Firebase init failed',e);}
 }
@@ -1607,12 +1591,7 @@ function onSignedIn(){
 }
 
 // refresh whichever page is open so the other device's edits appear instantly
-var _rfTimer=null;
 function refreshUIAfterCloudChange(){
-  if(_rfTimer)return;
-  _rfTimer=setTimeout(function(){_rfTimer=null;_refreshUIAfterCloudChangeNow();},200);
-}
-function _refreshUIAfterCloudChangeNow(){
   refreshDash();
   if(document.getElementById('page-autoEntry')?.classList.contains('active')){
     // Don't redraw the cashbook grid while the user is mid-edit in it (e.g. still picking a name
@@ -1708,28 +1687,15 @@ function attachCloudSync(){
       const data=snap.data();
       const keep=fbFieldIsUnsynced; // local edit not confirmed yet -> do NOT overwrite it with older cloud data
       let needMigrationPush=false;
-      fbApplyingRemote=true;
-      window.__lastSent=window.__lastSent||{};
-      const fromServer=!snap.metadata.fromCache;
-      let anyChanged=false;
-      const changedKeys={};
-      // Sirf wohi field apply/save hota hai jo sach mein badla ho (pehle har snapshot par sab kuch dobara likha jata tha).
-      const applyField=(k,val,assign)=>{
-        if(val===undefined||val===null||keep(k))return;
-        const cur=fbGetField(k);
-        const same=(cur!==undefined)&&(k==='cfg'?fbStable({...cur,...val})===fbStable(cur):fbStable(cur)===fbStable(val));
-        if(!same){assign();anyChanged=true;changedKeys[k]=true;}
-        // server ne jo diya wahi "last sent" hai — warna baad mein wapas usi value par edit karne par upload skip ho jata
-        if(fromServer)window.__lastSent[k]=JSON.stringify(fbGetField(k)); else delete window.__lastSent[k];
-      };
-      applyField('accounts',Array.isArray(data.accounts)?data.accounts:null,()=>{accounts=data.accounts;});
-      applyField('cfg',data.cfg,()=>{cfg={...cfg,...data.cfg};});
-      applyField('recycleBin',Array.isArray(data.recycleBin)?data.recycleBin:null,()=>{recycleBin=data.recycleBin;});
-      applyField('paidAccounts',Array.isArray(data.paidAccounts)?data.paidAccounts:null,()=>{paidAccounts=data.paidAccounts;});
-      applyField('paidEntries',Array.isArray(data.paidEntries)?data.paidEntries:null,()=>{paidEntries=data.paidEntries;});
-      applyField('tpRows',Array.isArray(data.tpRows)?data.tpRows:null,()=>{tpRows=data.tpRows;});
-      applyField('obRows',Array.isArray(data.obRows)?data.obRows:null,()=>{obRows=data.obRows;});
-      applyField('summaryTopAccounts',data.summaryTopAccounts,()=>{summaryTopAccounts=data.summaryTopAccounts;});
+      fbApplyingRemote=true;window.__lastSent={};
+      if(!keep('accounts') && Array.isArray(data.accounts))accounts=data.accounts;
+      if(!keep('cfg') && data.cfg)cfg={...cfg,...data.cfg};
+      if(!keep('recycleBin') && Array.isArray(data.recycleBin))recycleBin=data.recycleBin;
+      if(!keep('paidAccounts') && Array.isArray(data.paidAccounts))paidAccounts=data.paidAccounts;
+      if(!keep('paidEntries') && Array.isArray(data.paidEntries))paidEntries=data.paidEntries;
+      if(!keep('tpRows') && Array.isArray(data.tpRows))tpRows=data.tpRows;
+      if(!keep('obRows') && Array.isArray(data.obRows))obRows=data.obRows;
+      if(!keep('summaryTopAccounts') && data.summaryTopAccounts)summaryTopAccounts=data.summaryTopAccounts;
       // ONE-TIME MIGRATION: older versions kept the whole Cashbook ledger as one big array field here.
       // SAFE: sirf tab chale jab na local cfg mein aur na CLOUD cfg mein 'migrated' flag ho. Pehle yeh sirf local flag dekhta tha,
       // to purani/offline device par 2 mahine purana `entries` array naye data ko overwrite kar deta tha.
@@ -1741,14 +1707,14 @@ function attachCloudSync(){
         cfg._entriesSubcolMigrated=true;
         needMigrationPush=true;
       }
-      if(changedKeys.accounts)DB.set('cargo_accounts',accounts);
-      if(changedKeys.cfg||needMigrationPush)DB.set('cargo_cfg',cfg);
-      if(changedKeys.recycleBin)DB.set('cargo_recycle',recycleBin);
-      if(changedKeys.paidAccounts)DB.set('cargo_paid_accounts',paidAccounts);
-      if(changedKeys.paidEntries)DB.set('cargo_paid_entries',paidEntries);
-      if(changedKeys.summaryTopAccounts)DB.set('summary_top_accounts',summaryTopAccounts);
-      if(changedKeys.tpRows)DB.set('cargo_tp_rows',tpRows);
-      if(changedKeys.obRows)DB.set('cargo_ob_rows',obRows);
+      if(!keep('accounts'))DB.set('cargo_accounts',accounts);
+      if(!keep('cfg')||needMigrationPush)DB.set('cargo_cfg',cfg);
+      if(!keep('recycleBin'))DB.set('cargo_recycle',recycleBin);
+      if(!keep('paidAccounts'))DB.set('cargo_paid_accounts',paidAccounts);
+      if(!keep('paidEntries'))DB.set('cargo_paid_entries',paidEntries);
+      if(!keep('summaryTopAccounts'))DB.set('summary_top_accounts',summaryTopAccounts);
+      if(!keep('tpRows'))DB.set('cargo_tp_rows',tpRows);
+      if(!keep('obRows'))DB.set('cargo_ob_rows',obRows);
       fbApplyingRemote=false;
       // (pushes must happen AFTER fbApplyingRemote is reset, otherwise pushToCloud ignores them)
       if(needMigrationPush)pushToCloud({entries,cfg});
@@ -1761,8 +1727,8 @@ function attachCloudSync(){
       if(cloudMigrated && Array.isArray(data.entries) && !snap.metadata.fromCache && !snap.metadata.hasPendingWrites){
         docRef.update({entries:firebase.firestore.FieldValue.delete()}).catch(()=>{});
       }
-      const reconciled=reconcileMissingAccounts();
-      if(anyChanged||needMigrationPush||reconciled)refreshUIAfterCloudChange();
+      reconcileMissingAccounts();
+      refreshUIAfterCloudChange();
       setSyncBadge(fbIsFullySynced()?'connected':'syncing');
     }else if(!snap.metadata.fromCache){
       // Confirmed by the SERVER (not the offline cache) that this account has no cloud data yet — safe to seed.
@@ -1785,7 +1751,7 @@ function attachEntriesSync(){
     // NOTE: we no longer drop the whole snapshot while writes are pending (on a slow net that is
     // "always", and other-device changes in that window were lost). Instead each change is checked.
     let changed=false;
-    fbApplyingRemote=true;
+    fbApplyingRemote=true;window.__lastSent={};
     const idxMap=new Map(entries.map((e,i)=>[e.id,i]));
     snap.docChanges().forEach(chg=>{
       if(chg.doc.metadata.hasPendingWrites)return; // echo of OUR OWN not-yet-confirmed write — local copy is already right
@@ -2359,7 +2325,6 @@ function refreshDashNow(){
     <div style="font-size:11px;text-align:right;"><span style="color:#15803d;">CR:${fmt(v.cr)}</span><br><span style="color:#dc2626;">DR:${fmt(v.dr)}</span></div></div>`).join('')
     :'<div class="empty-state"><div class="empty-icon">👤</div><p>No accounts yet</p></div>';
   renderBalanceMismatch();
-  try{renderPendingPaid();}catch(e){console.error('pending paid',e);}
 }
 
 // BALANCE MISMATCH DETECTOR — finds cashbook pairs that only have a Baqaya OR only a Jama side
@@ -3212,7 +3177,6 @@ function renderCashbook(){
     return;
   }
 
-  const cbNumOffset=noFilterActive?hiddenOlderCount:0; // purani rows chhupi hon tab bhi # asli number dikhaye
   tbody.innerHTML=rows.map((r,i)=>{
     const pid=r.pairId || r.tempPairId;
     const dateVal=r.date||'';
@@ -3238,9 +3202,8 @@ function renderCashbook(){
       ? `<div style="font-size:10px;line-height:1.35;color:#64748b;margin-bottom:3px;">${autoPreview.dr?('DR: '+autoPreview.dr):''}${(autoPreview.dr&&autoPreview.cr)?'<br>':''}${autoPreview.cr?('CR: '+autoPreview.cr):''}</div>`
       : '';
     const isLast=(i===rows.length-1);
-    const _pend=cbPendingSides(r).length>0;
-    return `<tr data-pid="${pid}"${_pend?' class="cb-pending" title="Paid No baqi hai"':''}>
-      <td style="color:var(--text-light);font-size:11px;text-align:center;">${cbNumOffset+i+1}</td>
+    return `<tr data-pid="${pid}">
+      <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
       <td class="cbcell cb-date-cell" data-pid="${pid}">
         <input type="date" class="cbcell-input" value="${dateVal}" data-field="date" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)">
         <span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','date','')" title="Drag to copy down"></span>
@@ -6160,97 +6123,6 @@ document.addEventListener('click',(e)=>{
   if(wrap && wrap.classList.contains('open') && !wrap.contains(e.target)) closeFab();
 });
 document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeFab(); });
-</script>
-
-<script>
-// ===================== PENDING PAID NO (Cashbook) =====================
-// Cashbook row jis ki kisi side par P- / Paid Account hai aur us side ka Paid No khali hai = "pending".
-function cbPendingSides(r){
-  var out=[];
-  if(!r)return out;
-  ['dr','cr'].forEach(function(sd){
-    var e=r[sd];
-    if(!e||!e.name)return;
-    if(String(e.paidNo||'').trim())return;
-    if(classifyAccountPrefix(e.name)==='P')out.push({side:sd,e:e});
-  });
-  return out;
-}
-function cbSortedRealRows(){
-  var rows=cbRowsFromEntries();
-  rows.sort(function(a,b){
-    if(!a.date&&!b.date)return 0;
-    if(!a.date)return 1;
-    if(!b.date)return -1;
-    return cmpDateFast(a.date,b.date);
-  });
-  return rows;
-}
-function ppEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function renderPendingPaid(){
-  var card=document.getElementById('pendingPaidCard'),list=document.getElementById('pendingPaidList'),cnt=document.getElementById('pendingPaidCount');
-  if(!card||!list)return;
-  var rows=cbSortedRealRows(),items=[];
-  rows.forEach(function(r,i){
-    var ps=cbPendingSides(r);
-    if(ps.length)items.push({num:i+1,pid:r.pairId,date:r.date,ps:ps});
-  });
-  if(!items.length){card.style.display='none';list.innerHTML='';return;}
-  card.style.display='block';
-  if(cnt)cnt.textContent=items.length;
-  list.innerHTML=items.map(function(it){
-    var parts=it.ps.map(function(p){
-      var lbl=p.side==='dr'?'Baqaya':'Jama',col=p.side==='dr'?'#dc2626':'#15803d';
-      return '<b>'+ppEsc(p.e.name)+'</b> <span style="color:'+col+';font-weight:700;">('+lbl+': '+fmt(p.e.amount||0)+')</span>';
-    }).join(' &nbsp;·&nbsp; ');
-    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F2E3A6;flex-wrap:wrap;cursor:pointer;" onclick="goToPendingRow(\''+ppEsc(it.pid)+'\')">'
-      +'<div style="font-size:12px;"><span class="pp-num">#'+it.num+'</span><span style="font-weight:600;">'+ppEsc(it.date||'')+'</span> — '+parts+'</div>'
-      +'<button class="btn btn-sm btn-outline no-print" onclick="event.stopPropagation();goToPendingRow(\''+ppEsc(it.pid)+'\')">👁️ Cashbook Mein Dekhein</button>'
-    +'</div>';
-  }).join('');
-}
-function goToPendingRow(pid){
-  // search/date filter hata do aur itni purani rows load karo ke yeh row render ho jaye
-  ['cbSearch','cbFrom','cbTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-  var rows=cbSortedRealRows(),idx=rows.findIndex(function(r){return r.pairId===pid;});
-  if(idx>=0)cbVisibleLimit=Math.max(cbVisibleLimit,rows.length-idx+5);
-  showPage('autoEntry',document.querySelector('.nav-item[data-page="autoEntry"]'));
-  var tries=0;
-  (function go(){
-    var row=document.querySelector('#cashbookBody tr[data-pid="'+pid+'"]');
-    if(!row){
-      if(tries===1)renderCashbook();               // agar abhi tak render nahi hua
-      if(++tries<8)return setTimeout(go,150);
-      return;
-    }
-    row.scrollIntoView({block:'center'});
-    row.classList.add('cb-flash');
-    setTimeout(function(){row.classList.remove('cb-flash');},2500);
-  })();
-}
-// Paid No (ya account naam) badalte hi us row ka rang foran update (poora grid dobara nahi banta)
-function cbRefreshPendingRow(pid){
-  if(!pid)return;
-  var tr=document.querySelector('#cashbookBody tr[data-pid="'+pid+'"]');
-  if(!tr)return;
-  var r={dr:null,cr:null};
-  entries.forEach(function(e){
-    if(e.tpRowId||e.obRowId)return;
-    if((e.pairId||e.id)!==pid)return;
-    if(e.type==='DR')r.dr=e;else r.cr=e;
-  });
-  tr.classList.toggle('cb-pending',cbPendingSides(r).length>0);
-  if(typeof refreshDash==='function')refreshDash();
-}
-(function(){
-  var _orig=window.cbFieldChange;
-  if(typeof _orig!=='function')return;
-  window.cbFieldChange=function(el){
-    var res=_orig.apply(this,arguments);
-    try{cbRefreshPendingRow(el&&el.dataset&&el.dataset.pid);}catch(e){}
-    return res;
-  };
-})();
 </script>
 
 <script>
