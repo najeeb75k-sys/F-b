@@ -287,6 +287,37 @@
   #cashbookBody tr:hover td{background:#f7f9fc;}
   #cashbookBody tr:hover td.cbcell input:focus{background:#eff5ff;}
 
+  /* ===== Pending Paid No (P- account, Paid No abhi tak khali) =====
+     Halka amber overlay (inset shadow) — neeche ki debit/credit tint aur hover jyon ki tyon rehti hai,
+     aur Paid No bharte hi ye smoothly fade-out ho jata hai. Print par koi asar nahi. */
+  #cashbookBody td{transition:box-shadow .28s ease,background-color .15s ease;}
+  #cashbookBody tr.cb-pending td{box-shadow:inset 0 0 0 100px rgba(245,158,11,.13);}
+  #cashbookBody tr.cb-pending td:first-child{box-shadow:inset 3px 0 0 #f59e0b,inset 0 0 0 100px rgba(245,158,11,.13);}
+  #cashbookBody td.cbcell input.cb-need{background:rgba(245,158,11,.16);box-shadow:inset 0 0 0 1.5px rgba(245,158,11,.75);}
+  #cashbookBody td.cbcell input.cb-need:focus{background:#eff5ff;box-shadow:inset 0 0 0 2px var(--primary-light);}
+  #cashbookBody td.cbcell input[data-field="paidNo"]{transition:background-color .2s ease,box-shadow .2s ease;}
+
+  /* Smooth scrolling feel inside the big grids (touch + trackpad) */
+  #cashbookScrollWrap,#tpScrollWrap,#obScrollWrap{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  #tpEntryBody td{transition:background-color .15s ease;}
+  @media (prefers-reduced-motion:reduce){#cashbookBody td,#tpEntryBody td,#cashbookBody td.cbcell input[data-field="paidNo"]{transition:none;}}
+  @media print{#cashbookBody tr.cb-pending td,#cashbookBody tr.cb-pending td:first-child{box-shadow:none!important;}#cashbookBody td.cbcell input.cb-need{background:transparent!important;box-shadow:none!important;}}
+
+  /* Dashboard — Pending Paid No card */
+  .pend-card{border-left:4px solid #f59e0b;}
+  .pend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;padding:0 9px;border-radius:999px;background:#f59e0b;color:#fff;font-size:12.5px;font-weight:800;font-family:var(--mono);margin-left:8px;}
+  .pend-badge.zero{background:#22a06b;}
+  .pend-list{max-height:230px;overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:10px;}
+  .pend-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background-color .15s ease;font-size:12.5px;}
+  .pend-item:last-child{border-bottom:none;}
+  .pend-item:hover{background:rgba(245,158,11,.10);}
+  .pend-no{flex:0 0 auto;min-width:24px;height:24px;border-radius:7px;background:rgba(245,158,11,.18);color:#92400e;font-weight:800;font-size:11.5px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);}
+  .pend-main{flex:1 1 auto;min-width:0;}
+  .pend-name{font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pend-sub{font-size:11px;color:var(--text-light);margin-top:1px;}
+  .pend-amt{flex:0 0 auto;font-family:var(--mono);font-weight:700;font-size:12px;text-align:right;}
+  .pend-go{flex:0 0 auto;color:var(--primary-light);font-size:15px;}
+
   /* ===== Entry pages (Cashbook & Party/Paid Entry) — professional toolbar, ledger tint, totals ===== */
   .entry-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--bg-light);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:12px;}
   .entry-toolbar .srch-wrap{min-width:170px;}
@@ -640,6 +671,16 @@ body{background:linear-gradient(160deg,#EAF2FF 0%,#F3EEFF 55%,#FFF1E8 100%);}
           <div class="stat-card"><div class="stat-head"><div class="stat-label" data-i18n="balCredit">Total Jama</div><div class="stat-icon"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></div></div><div class="stat-value green" id="statBalCredit">0</div><div class="stat-sub">Wasool hui raqam</div></div>
           <div class="stat-card"><div class="stat-head"><div class="stat-label" data-i18n="balDebit">Total Baqaya</div><div class="stat-icon"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg></div></div><div class="stat-value red" id="statBalDebit">0</div><div class="stat-sub">Wasool karni hai</div></div>
           <div class="stat-card"><div class="stat-head"><div class="stat-label" data-i18n="balance">Net Balance</div><div class="stat-icon"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16M4 16h16M8 4l-4 4 4 4M16 12l4 4-4 4"/></svg></div></div><div class="stat-value" id="statBalance">0</div><div class="stat-sub">Jama minus Baqaya</div></div>
+        </div>
+        <div id="pendingPaidCard" class="card pend-card">
+          <div class="card-header">
+            <span class="card-title">⏳ Pending — Paid No Baqi Hai <span class="pend-badge zero" id="pendingPaidCount">0</span></span>
+            <button class="btn btn-sm btn-outline no-print" id="pendingPaidGo" onclick="goToPendingRow()">📒 Cashbook Mein Dekhein</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-light);margin-bottom:10px;">
+            Cashbook ki wo entries jinmein <b>P-</b> wala Paid Account hai lekin uske samne <b>Paid No</b> abhi nahi likha. Kisi entry par click karein — seedha Cashbook mein wahi row khul jayegi.
+          </div>
+          <div id="pendingPaidList"></div>
         </div>
         <div id="balanceMismatchCard" class="card" style="display:none;border:1px solid #E9CF9A;background:#FFF6E5;">
           <div class="card-header">
@@ -2325,6 +2366,101 @@ function refreshDashNow(){
     <div style="font-size:11px;text-align:right;"><span style="color:#15803d;">CR:${fmt(v.cr)}</span><br><span style="color:#dc2626;">DR:${fmt(v.dr)}</span></div></div>`).join('')
     :'<div class="empty-state"><div class="empty-icon">👤</div><p>No accounts yet</p></div>';
   renderBalanceMismatch();
+  renderPendingPaid();
+}
+
+// PENDING PAID NO — only accounts whose name starts with "P-" are Paid Accounts. If such a Cashbook
+// side has no Paid No yet, the whole row is "pending" (light amber in Cashbook + listed on Dashboard).
+function cbIsPaidAcct(name){return String(name||'').trim().toLowerCase().startsWith('p-');}
+function cbPendingSides(dr,cr,pid){
+  const pn=(window.cbPendingPaidNo&&window.cbPendingPaidNo[pid])||{};
+  const d=!!(dr && cbIsPaidAcct(dr.name) && !String(dr.paidNo||pn.dr||'').trim());
+  const c=!!(cr && cbIsPaidAcct(cr.name) && !String(cr.paidNo||pn.cr||'').trim());
+  return {dr:d,cr:c,any:d||c};
+}
+// Live-updates just ONE row's colour/hint (no re-render, so focus and typing stay untouched).
+function cbRefreshPendingRow(pid){
+  const tr=document.querySelector(`#cashbookBody tr[data-pid="${pid}"]`);
+  if(!tr)return;
+  const dr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='DR');
+  const cr=entries.find(e=>(e.pairId||e.id)===pid && e.type==='CR');
+  const st=cbPendingSides(dr,cr,pid);
+  tr.classList.toggle('cb-pending',st.any);
+  const di=tr.querySelector('input[data-field="paidNo"][data-side="dr"]');
+  const ci=tr.querySelector('input[data-field="paidNo"][data-side="cr"]');
+  if(di)di.classList.toggle('cb-need',st.dr);
+  if(ci)ci.classList.toggle('cb-need',st.cr);
+}
+function cbGetPendingList(){
+  const out=[];
+  cbRowsFromEntries().forEach(r=>{
+    const pid=r.pairId;if(!pid)return;
+    const st=cbPendingSides(r.dr,r.cr,pid);
+    if(!st.any)return;
+    out.push({pid,date:r.date||'',dr:st.dr?r.dr:null,cr:st.cr?r.cr:null});
+  });
+  out.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  return out;
+}
+function renderPendingPaid(){
+  const box=document.getElementById('pendingPaidList');
+  const badge=document.getElementById('pendingPaidCount');
+  if(!box||!badge)return;
+  const list=cbGetPendingList();
+  badge.textContent=list.length;
+  badge.classList.toggle('zero',!list.length);
+  const goBtn=document.getElementById('pendingPaidGo');
+  if(goBtn)goBtn.style.display=list.length?'':'none';
+  if(!list.length){
+    box.innerHTML='<div style="padding:12px;text-align:center;font-size:12.5px;color:#15803d;font-weight:600;">✅ Koi entry pending nahi — sab P- accounts par Paid No lag chuka hai</div>';
+    return;
+  }
+  const MAX=60;
+  const safe=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const items=list.slice(0,MAX).map((it,i)=>{
+    const parts=[];
+    if(it.dr)parts.push({side:'Baqaya',e:it.dr,c:'#dc2626'});
+    if(it.cr)parts.push({side:'Jama',e:it.cr,c:'#15803d'});
+    const names=parts.map(p=>safe(p.e.name)).join(' · ');
+    const sub=parts.map(p=>`<span style="color:${p.c};font-weight:600;">${p.side}</span>`).join(' · ');
+    const amt=parts.reduce((m,p)=>Math.max(m,p.e.amount||0),0);
+    return `<div class="pend-item" onclick="goToPendingRow('${it.pid}')" title="Cashbook mein ye row kholein">
+      <div class="pend-no">${i+1}</div>
+      <div class="pend-main"><div class="pend-name">${names}</div><div class="pend-sub">${safe(it.date)} · ${sub} · Paid No chahiye</div></div>
+      <div class="pend-amt">${amt?fmt(amt):''}</div>
+      <div class="pend-go">›</div>
+    </div>`;
+  }).join('');
+  const more=list.length>MAX?`<div style="padding:8px 12px;font-size:11.5px;color:var(--text-light);text-align:center;">+ ${list.length-MAX} aur pending entries — Cashbook mein dekhein</div>`:'';
+  box.innerHTML=`<div class="pend-list">${items}${more}</div>`;
+  if(goBtn)goBtn.setAttribute('data-first',list[0].pid);
+}
+// Opens Cashbook and scrolls to (and briefly outlines) the given row. No pid = the first pending row.
+function goToPendingRow(pid){
+  if(!pid){
+    const b=document.getElementById('pendingPaidGo');
+    pid=b?b.getAttribute('data-first'):'';
+  }
+  showPage('autoEntry',document.querySelector('.nav-item[data-page="autoEntry"]'));
+  let tries=0;
+  const go=()=>{
+    tries++;
+    const tr=pid?document.querySelector(`#cashbookBody tr[data-pid="${pid}"]`):document.querySelector('#cashbookBody tr.cb-pending');
+    if(tr){
+      tr.scrollIntoView({behavior:'smooth',block:'center'});
+      tr.style.outline='2px solid var(--primary-light)';
+      setTimeout(()=>{tr.style.outline='';},2500);
+      return;
+    }
+    // Row not drawn (older than the visible window, or hidden by a search/date filter) → widen once.
+    if(tries===3){
+      ['cbSearch','cbFrom','cbTo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+      cbVisibleLimit=Math.max(cbVisibleLimit,cbRowsFromEntries().length+5);
+      renderCashbook();
+    }
+    if(tries<14)setTimeout(go,120);
+  };
+  setTimeout(go,150);
 }
 
 // BALANCE MISMATCH DETECTOR — finds cashbook pairs that only have a Baqaya OR only a Jama side
@@ -3197,12 +3333,13 @@ function renderCashbook(){
     const dualPaidHint=(_drPaidAcc && _crPaidAcc && _drPaidAcc.id!==_crPaidAcc.id)
       ? `<div style="font-size:9px;color:#b45309;line-height:1.3;margin-top:2px;white-space:nowrap;" title="Baqaya aur Jama alag-alag Paid Accounts se link hain">B:${_drPaidAcc.paidNo||_drPaidAcc.name} · J:${_crPaidAcc.paidNo||_crPaidAcc.name}</div>`
       : '';
+    const _pend=cbPendingSides(r.dr,r.cr,pid);
     const autoPreview=cbComposeDesc(drName,crName,modeVal,noteVal);
     const previewHtml=(autoPreview.dr||autoPreview.cr)
       ? `<div style="font-size:10px;line-height:1.35;color:#64748b;margin-bottom:3px;">${autoPreview.dr?('DR: '+autoPreview.dr):''}${(autoPreview.dr&&autoPreview.cr)?'<br>':''}${autoPreview.cr?('CR: '+autoPreview.cr):''}</div>`
       : '';
     const isLast=(i===rows.length-1);
-    return `<tr data-pid="${pid}">
+    return `<tr data-pid="${pid}"${_pend.any?' class="cb-pending"':''}>
       <td style="color:var(--text-light);font-size:11px;text-align:center;">${i+1}</td>
       <td class="cbcell cb-date-cell" data-pid="${pid}">
         <input type="date" class="cbcell-input" value="${dateVal}" data-field="date" data-side="" data-pid="${pid}" onchange="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)">
@@ -3213,8 +3350,8 @@ function renderCashbook(){
       <td class="cbcell"><input type="text" placeholder="Ref" value="${drRef}" data-field="ref" data-side="dr" data-pid="${pid}" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)"><span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','ref','dr')" title="Drag to copy down"></span></td>
       <td class="cbcell" style="background:rgba(232,160,32,0.05);padding:4px 3px;">
         <div style="display:flex;gap:3px;align-items:center;">
-          <input type="text" placeholder="B#" title="Baqaya side ka Paid No" value="${drPaidNo}" data-field="paidNo" data-side="dr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
-          <input type="text" placeholder="J#" title="Jama side ka Paid No" value="${crPaidNo}" data-field="paidNo" data-side="cr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
+          <input type="text" placeholder="B#" title="Baqaya side ka Paid No" value="${drPaidNo}"${_pend.dr?' class="cb-need"':''} data-field="paidNo" data-side="dr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
+          <input type="text" placeholder="J#" title="Jama side ka Paid No" value="${crPaidNo}"${_pend.cr?' class="cb-need"':''} data-field="paidNo" data-side="cr" data-pid="${pid}" list="cbPaidNoList" onblur="cbFieldChange(this)" onkeydown="cbKeyHandler(event,this,${isLast})" onpaste="cbPasteHandler(event,this)" style="color:#e8a020;font-weight:600;min-width:0;">
         </div>
         ${dualPaidHint}
         <span class="fill-handle" onmousedown="cbStartDrag(event,'${pid}','paidNo','dr')" title="Drag Baqaya Paid No to copy down"></span>
@@ -3358,6 +3495,7 @@ function cbFieldChange(el){
     }
     cbSyncPaidLink(pid);
     save();
+    cbRefreshPendingRow(pid);
     if(paidAcc) toast('Paid Account "'+paidAcc.name+'" se link ho gaya! ✅','success');
     return;
   }
@@ -3396,6 +3534,7 @@ function cbFieldChange(el){
     cbUpsertField(pid,side,'name',value);
     cbRegenerateDesc(pid); // account name changed → both sides' auto description need recomputing
     cbSyncPaidLink(pid);
+    cbRefreshPendingRow(pid);
   }else{
     if(field==='amount' && value && parseFloat(value)<0){toast('Amount negative nahi ho sakta','error');el.value='';return;}
     cbUpsertField(pid,side,field,value);
